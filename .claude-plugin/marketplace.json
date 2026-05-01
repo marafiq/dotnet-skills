@@ -1,0 +1,9 @@
+{
+  "name": "dotnet-skills",
+  "description": "Claude Code skills and plugins for the .NET ecosystem — ASP.NET MVC 5 on .NET Framework 4.8 and ASP.NET Core MVC on .NET 10.",
+  "owner": {
+    "name": "marafiq",
+    "url": "https://github.com/marafiq"
+  },
+  "plugins": []
+}

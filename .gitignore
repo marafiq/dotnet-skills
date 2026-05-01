@@ -1,0 +1,29 @@
+# macOS
+.DS_Store
+
+# .NET build output
+bin/
+obj/
+*.user
+*.suo
+.vs/
+
+# Rider / VS Code / Visual Studio
+.idea/
+.vscode/
+*.swp
+
+# NuGet
+*.nupkg
+packages/
+
+# Test results
+[Tt]est[Rr]esult*/
+*.trx
+*.coverage
+
+# Logs
+*.log
+
+# Claude Code per-machine local settings
+.claude/settings.local.json
