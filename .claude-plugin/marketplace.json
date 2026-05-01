@@ -1,9 +1,25 @@
 {
   "name": "dotnet-skills",
-  "description": "Claude Code skills and plugins for the .NET ecosystem — ASP.NET MVC 5 on .NET Framework 4.8 and ASP.NET Core MVC on .NET 10.",
+  "description": "Skills for ASP.NET MVC on .NET Framework 4.8 (MVC 5.3) and ASP.NET Core MVC on .NET 10.",
   "owner": {
     "name": "marafiq",
     "url": "https://github.com/marafiq"
   },
-  "plugins": []
+  "plugins": [
+    {
+      "name": "dotnet-skills",
+      "source": "./",
+      "description": "Skills for ASP.NET MVC on .NET Framework 4.8 (MVC 5.3) and ASP.NET Core MVC on .NET 10 — controllers, routing, views, models, filters, EF, identity, testing, migration.",
+      "version": "0.1.0",
+      "author": {
+        "name": "marafiq"
+      },
+      "keywords": [
+        "dotnet",
+        "aspnet",
+        "mvc",
+        "csharp"
+      ]
+    }
+  ]
 }
