@@ -1,6 +1,6 @@
 {
-  "name": "dotnet-skills",
-  "description": "Skills for ASP.NET MVC on .NET Framework 4.8 (MVC 5.3) and ASP.NET Core MVC on .NET 10 — controllers, routing, views, models, filters, EF, identity, testing, and migration patterns.",
+  "name": "dotnet-current",
+  "description": "Skills for ASP.NET Core MVC on .NET 10 with C# 14, Entity Framework Core 10, and modern .NET runtime patterns (DI, hosting, configuration, async).",
   "version": "0.1.0",
   "author": {
     "name": "marafiq",
@@ -11,12 +11,11 @@
   "license": "MIT",
   "keywords": [
     "dotnet",
-    "aspnet",
+    "aspnet-core",
     "mvc",
-    "csharp",
-    "net48",
+    "efcore",
     "net10",
-    "ef",
-    "identity"
+    "csharp14",
+    "modern"
   ]
 }

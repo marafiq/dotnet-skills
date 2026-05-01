@@ -1,6 +1,9 @@
 # CLAUDE.md — dotnet-skills
 
-Claude Code plugin and one-plugin marketplace (`source: "./"`) for C#/.NET skills, agents, commands, hooks, and MCP servers.
+Claude Code marketplace hosting **two plugins** for C#/.NET work. Users install only the runtime they actually ship to:
+
+- **`dotnet-legacy`** — ASP.NET MVC 5.3, Web Forms, EF6 on **.NET Framework 4.8** with **C# 8.0** (compiler subset; see caveats below). Includes migration patterns toward ASP.NET Core.
+- **`dotnet-current`** — ASP.NET Core MVC, EF Core on **.NET 10** with **C# 14**.
 
 ## Editorial standards (read first)
 
@@ -22,18 +25,16 @@ Code written without these fits an answer to a question no one asked.
 
 ### Discover before deciding
 
-Treat patterns and architectures as *candidates*, not defaults. Weigh ≥ 2 realistic options:
+Treat patterns and architectures as *candidates*, not defaults. Weigh ≥ 2 realistic options when there is genuine architectural ambiguity. For canonical, one-right-answer questions, skip the comparison and state the answer.
 
 - Explore the **public surface from the consumer's perspective** first. Pick the notation that fits the question — method signatures, HTTP contracts, sequence / class / activity / flow diagrams, or plain prose when reasoning *is* the artifact. Verbose is sometimes the right answer; terse is sometimes the right answer. The point is to force trade-offs into the open before implementation hides them.
-- For each option, name what it gets you, what it costs you, what it forecloses later.
+- For each option, name what it gets you, what it costs, what it forecloses later.
 - Record what you **rejected and why** — the rejected branch is half the lesson.
 - Record what you **chose and why**, plus the conditions under which the choice would flip.
 
-This is where critical time should go — not on writing more code, on choosing not to.
-
 ### Refuse dogma
 
-Clean Architecture, SOLID, DDD, repository, CQRS, Result types, mediator, vertical slices — useful scaffolds, not commandments. A skill ending in "always do X" is wrong by construction. The honest answer is *"X when these conditions hold; Y when these others do; here is the seam between them."*
+Clean Architecture, SOLID, DDD, repository, CQRS, Result types, mediator, vertical slices — useful scaffolds, not commandments. Name the conditions that make a pattern apply, and the conditions that make it noise. *"X when these conditions hold; Y when these others do; here is the seam between them"* beats *"always do X"*.
 
 ### Prose style
 
@@ -47,94 +48,115 @@ Match claims to what you can defend; put the warrant on the page. *"Completed X 
 
 When concision and precision conflict, pay the words for precision.
 
-## Scope
+## Scope per plugin
 
-### Legacy stack — **.NET Framework 4.8** with **C# 8.0**
+### `dotnet-legacy`
+Target: **.NET Framework 4.8** with **C# 8.0** (set `<LangVersion>8.0</LangVersion>` in csproj).
+
+In:
 - ASP.NET MVC 5.3 — `System.Web`, `Global.asax`, `Web.config`, jQuery Unobtrusive AJAX
 - ASP.NET Web Forms — `.aspx`, code-behind, ViewState, page lifecycle, server controls
 - Entity Framework 6.x
+- Cross-cutting on this stack: testing, validation, identity (OWIN / `System.Web` / Membership), logging, caching, error handling
+- Migration patterns toward `dotnet-current`
 
-### Modern stack — **.NET 10** with **C# 14**
-- ASP.NET Core MVC 10 — `Program.cs`, endpoint routing, built-in DI and configuration
+**C# 8 caveat.** On `net48`, C# 8 features split three ways:
+- **Compiler-only — work as-is**: switch expressions, nullable reference types, pattern matching, `using` declarations, static local functions, readonly members, null-coalescing assignment.
+- **Need polyfills**: async streams (`Microsoft.Bcl.AsyncInterfaces`), ranges/indices (`System.Memory`).
+- **Don't work on `net48` at all**: default interface methods, some IL-level features.
+
+Skills that demonstrate C# 8 features must declare which bucket the feature falls in and what NuGet polyfills (if any) the user needs.
+
+### `dotnet-current`
+Target: **.NET 10** with **C# 14**.
+
+In:
+- ASP.NET Core MVC 10 — `Program.cs`, endpoint routing, built-in DI and configuration, middleware pipeline
 - Entity Framework Core 10
+- Cross-cutting on this stack: xUnit / NUnit, FluentValidation / data annotations, ASP.NET Core Identity, `ILogger<T>`, `IMemoryCache` / `IDistributedCache`, ProblemDetails error handling
 
-### Cross-cutting (both stacks)
-C# language features at the declared version; testing, validation, identity/authorization, logging, caching, error handling; migration patterns (legacy → modern).
-
-### Out of scope
-Blazor (Server / WebAssembly), Razor Pages, desktop UI (WPF, WinForms, MAUI, Avalonia, Uno), F#, VB.NET, Unity, Godot, Xamarin.
+### Out of scope (both plugins)
+Blazor (Server / WebAssembly), Razor Pages, desktop UI (WPF, WinForms, MAUI, Avalonia, Uno), F#, VB.NET, Unity, Godot, Xamarin. These are .NET-ecosystem but stylistically far enough from MVC-style web work to need their own plugins later if anyone wants them.
 
 ## Layout
 
 ```
 .claude-plugin/
-  plugin.json
-  marketplace.json
-skills/<name>/
-  SKILL.md             # required
-  references/          # variant-specific detail, on-demand reading
-  scripts/             # executable helpers
-  assets/              # templates / output
-agents/<name>.md       # subagents
-commands/<name>.md     # slash commands
-hooks/hooks.json       # event handlers
-.mcp.json              # MCP servers
+  marketplace.json            # lists both plugins
+plugins/
+  dotnet-legacy/
+    .claude-plugin/
+      plugin.json
+    skills/<name>/
+      SKILL.md
+      references/             # optional, used for MVC 5 ↔ Web Forms variant split inside this plugin
+      scripts/, assets/       # optional
+    [agents/, commands/, hooks/, .mcp.json — at plugin root if used]
+  dotnet-current/
+    .claude-plugin/
+      plugin.json
+    skills/<name>/
+      SKILL.md
+      [references/, scripts/, assets/]
+    [agents/, commands/, hooks/, .mcp.json]
 ```
 
-`.claude-plugin/` holds **only** manifests. Components are auto-discovered. Installed namespace is `/dotnet-skills:<name>`. The marketplace lists this single plugin with `"source": "./"` — don't restructure that unless splitting the repo into multiple plugins.
+`.claude-plugin/` directories hold **only** manifests. Components are auto-discovered from each plugin root. Installed namespaces are `/dotnet-legacy:<name>` and `/dotnet-current:<name>`.
 
 ## Authoring
 
-### Skill — `skills/<name>/SKILL.md`
-Frontmatter requires `name` (kebab-case, must match the folder) and `description` (the trigger — state *what*, *when*, *which variant*; front-load; capped at 1,536 chars combined with `when_to_use`). Body under ~500 lines; push detail into `references/`.
+The plugin choice already pins the runtime — you do not need to declare ".NET 4.8" or ".NET 10" in every skill description. Declare it only when a skill is variant-aware *within* its plugin (e.g. an MVC 5 vs Web Forms skill in `dotnet-legacy`).
 
-### Subagent — `agents/<name>.md`
+### Skill — `plugins/<plugin>/skills/<name>/SKILL.md`
+Frontmatter requires `name` (kebab-case, must match the folder) and `description` (the trigger — state *what* and *when*; front-load; capped at 1,536 chars combined with `when_to_use`). Body under ~500 lines; push detail into `references/`.
+
+### Subagent — `plugins/<plugin>/agents/<name>.md`
 Frontmatter: `name`, `description` (when to dispatch), optional `tools`, optional `model`. Body is the system prompt. Use specialized agents (e.g. `controller-author`, `efcore-migration-runner`) to protect the main thread's context for long, focused tasks.
 
-### Slash command — `commands/<name>.md`
+### Slash command — `plugins/<plugin>/commands/<name>.md`
 Markdown with optional frontmatter. `$ARGUMENTS` is user input. Skills are preferred for new work — commands are the legacy form retained for compatibility.
 
-### Hook — `hooks/hooks.json`
+### Hook — `plugins/<plugin>/hooks/hooks.json`
 Fires on Claude Code events (`PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `Stop`, etc.). Use for deterministic guardrails (block, validate, normalize) — not advisory text.
 
-### MCP server — `.mcp.json`
+### MCP server — `plugins/<plugin>/.mcp.json`
 Only when the integration genuinely needs a server (auth flows, long-running connections, external state). For one-shot or scriptable work, prefer `scripts/` inside a skill.
 
 ### Path env vars across components
 - Skill referencing its own files → `CLAUDE_SKILL_DIR` or relative paths. Points at the skill folder, not the plugin root.
 - Hooks, MCP, LSP, and monitor configs referencing plugin-bundled files → `CLAUDE_PLUGIN_ROOT`. Treat as read-only — the path changes on every plugin update.
-- Persistent state that must survive plugin updates (dependency installs, caches, generated code) → `CLAUDE_PLUGIN_DATA`. Auto-created on first reference; resolves under `~/.claude/plugins/data/{id}/`.
+- Persistent state that must survive plugin updates → `CLAUDE_PLUGIN_DATA`. Auto-created on first reference; resolves under `~/.claude/plugins/data/{id}/`.
 
-### Multi-variant content
-Per-variant detail in `references/<variant>.md`; `SKILL.md` selects by version and readers load only the matching file. Slugs:
-- Runtime: `net48-cs8.md`, `net10-cs14.md`
-- ORM: `ef6.md`, `efcore.md`
-- Web stack: `mvc5.md`, `webforms.md`, `aspnetcore-mvc.md`
+### Variant content within a plugin
+`dotnet-legacy` covers two web stacks (MVC 5 and Web Forms). When a skill applies to both, put per-variant detail in `references/<variant>.md` and let `SKILL.md` select. Slugs:
+- `mvc5.md`, `webforms.md` — web stack split inside `dotnet-legacy`
+- `ef6.md`, `efcore.md` — only relevant for cross-stack skills, which should be rare given the plugin split
 
-Do not duplicate variant content in `SKILL.md`.
+`dotnet-current` is single-stack (Core MVC + EF Core), so most of its skills will not need a `references/` split.
 
 ## Naming
 
-kebab-case. Name the task, not the technology — `ef-migration-workflow`, not `entity-framework-stuff`. Folder name = slug = what users actually type.
+kebab-case. Name the task, not the technology — `controller-action-results`, not `mvc-controllers`. Folder name = slug = what users actually type.
 
 ## Workflow
 
-Test locally without installing:
+Test a plugin locally without installing:
 ```bash
-claude --plugin-dir /path/to/dotnet-skills
+claude --plugin-dir /path/to/dotnet-skills/plugins/dotnet-legacy
+claude --plugin-dir /path/to/dotnet-skills/plugins/dotnet-current
 ```
 After edits, run `/reload-plugins`.
 
 ## Before release
 
-1. `claude plugin validate .` — checks `plugin.json`, skill/agent/command frontmatter, and `hooks/hooks.json` for syntax and schema errors.
-2. `claude --plugin-dir .` — exercise the plugin end-to-end locally before installing from the marketplace.
-3. Bump `version` in both `plugin.json` and `marketplace.json`. With a fixed `version` set, marketplace updates don't propagate to installed users until the field changes.
+Run for **each** plugin you changed:
+
+1. `claude plugin validate plugins/<plugin-name>` — checks the plugin manifest and component frontmatter.
+2. `claude --plugin-dir plugins/<plugin-name>` — exercise it end-to-end before users install via the marketplace.
+3. Bump `version` in the plugin's `plugin.json` **and** update the matching entry in the root `marketplace.json`. Without a version bump, marketplace updates do not propagate to installed users.
 4. If discovery fails, run `claude --debug` to see what loaded and what didn't.
 
 ## Reference (Anthropic docs)
-
-Linked live. A local mirror under `docs/anthropic/` is on the table — open if turns start hitting these pages frequently.
 
 - Plugins: <https://code.claude.com/docs/en/plugins>
 - Skills: <https://code.claude.com/docs/en/skills>

@@ -1,24 +1,41 @@
 {
   "name": "dotnet-skills",
-  "description": "Skills for ASP.NET MVC on .NET Framework 4.8 (MVC 5.3) and ASP.NET Core MVC on .NET 10.",
+  "description": "Claude Code marketplace for C#/.NET — two plugins, one for the legacy stack (.NET Framework 4.8 / C# 8.0) and one for the current stack (.NET 10 / C# 14). Users install only the runtime they ship.",
   "owner": {
     "name": "marafiq",
     "url": "https://github.com/marafiq"
   },
   "plugins": [
     {
-      "name": "dotnet-skills",
-      "source": "./",
-      "description": "Skills for ASP.NET MVC on .NET Framework 4.8 (MVC 5.3) and ASP.NET Core MVC on .NET 10 — controllers, routing, views, models, filters, EF, identity, testing, migration.",
+      "name": "dotnet-legacy",
+      "source": "./plugins/dotnet-legacy",
+      "description": "ASP.NET MVC 5.3, Web Forms, EF6 on .NET Framework 4.8 (C# 8.0). Includes migration patterns toward ASP.NET Core.",
       "version": "0.1.0",
       "author": {
         "name": "marafiq"
       },
       "keywords": [
-        "dotnet",
         "aspnet",
+        "mvc5",
+        "webforms",
+        "ef6",
+        "net48",
+        "legacy"
+      ]
+    },
+    {
+      "name": "dotnet-current",
+      "source": "./plugins/dotnet-current",
+      "description": "ASP.NET Core MVC, EF Core on .NET 10 (C# 14). Modern .NET runtime patterns.",
+      "version": "0.1.0",
+      "author": {
+        "name": "marafiq"
+      },
+      "keywords": [
+        "aspnet-core",
         "mvc",
-        "csharp"
+        "efcore",
+        "net10"
       ]
     }
   ]

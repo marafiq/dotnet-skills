@@ -1,0 +1,23 @@
+{
+  "name": "dotnet-legacy",
+  "description": "Skills for ASP.NET MVC 5.3 and Web Forms on .NET Framework 4.8 (C# 8.0 with documented polyfill caveats), Entity Framework 6.x, and migration patterns toward ASP.NET Core MVC.",
+  "version": "0.1.0",
+  "author": {
+    "name": "marafiq",
+    "url": "https://github.com/marafiq"
+  },
+  "homepage": "https://github.com/marafiq/dotnet-skills",
+  "repository": "https://github.com/marafiq/dotnet-skills",
+  "license": "MIT",
+  "keywords": [
+    "dotnet",
+    "aspnet",
+    "mvc5",
+    "webforms",
+    "ef6",
+    "net48",
+    "csharp",
+    "legacy",
+    "migration"
+  ]
+}
