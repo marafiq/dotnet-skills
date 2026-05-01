@@ -3,7 +3,7 @@
 Claude Code marketplace hosting **two plugins** for C#/.NET work. Users install only the runtime they actually ship to:
 
 - **`dotnet-legacy`** — ASP.NET MVC 5.3, Web Forms, EF6 on **.NET Framework 4.8** with **C# 8.0** (compiler subset; see caveats below). Includes migration patterns toward ASP.NET Core.
-- **`dotnet-current`** — ASP.NET Core MVC, EF Core on **.NET 10** with **C# 14**.
+- **`dotnet-10`** — ASP.NET Core MVC, EF Core on **.NET 10** with **C# 14**.
 
 ## Editorial standards (read first)
 
@@ -58,7 +58,7 @@ In:
 - ASP.NET Web Forms — `.aspx`, code-behind, ViewState, page lifecycle, server controls
 - Entity Framework 6.x
 - Cross-cutting on this stack: testing, validation, identity (OWIN / `System.Web` / Membership), logging, caching, error handling
-- Migration patterns toward `dotnet-current`
+- Migration patterns toward `dotnet-10`
 
 **C# 8 caveat.** On `net48`, C# 8 features split three ways:
 - **Compiler-only — work as-is**: switch expressions, nullable reference types, pattern matching, `using` declarations, static local functions, readonly members, null-coalescing assignment.
@@ -67,7 +67,7 @@ In:
 
 Skills that demonstrate C# 8 features must declare which bucket the feature falls in and what NuGet polyfills (if any) the user needs.
 
-### `dotnet-current`
+### `dotnet-10`
 Target: **.NET 10** with **C# 14**.
 
 In:
@@ -92,7 +92,7 @@ plugins/
       references/             # optional, used for MVC 5 ↔ Web Forms variant split inside this plugin
       scripts/, assets/       # optional
     [agents/, commands/, hooks/, .mcp.json — at plugin root if used]
-  dotnet-current/
+  dotnet-10/
     .claude-plugin/
       plugin.json
     skills/<name>/
@@ -101,7 +101,7 @@ plugins/
     [agents/, commands/, hooks/, .mcp.json]
 ```
 
-`.claude-plugin/` directories hold **only** manifests. Components are auto-discovered from each plugin root. Installed namespaces are `/dotnet-legacy:<name>` and `/dotnet-current:<name>`.
+`.claude-plugin/` directories hold **only** manifests. Components are auto-discovered from each plugin root. Installed namespaces are `/dotnet-legacy:<name>` and `/dotnet-10:<name>`.
 
 ## Authoring
 
@@ -132,7 +132,7 @@ Only when the integration genuinely needs a server (auth flows, long-running con
 - `mvc5.md`, `webforms.md` — web stack split inside `dotnet-legacy`
 - `ef6.md`, `efcore.md` — only relevant for cross-stack skills, which should be rare given the plugin split
 
-`dotnet-current` is single-stack (Core MVC + EF Core), so most of its skills will not need a `references/` split.
+`dotnet-10` is single-stack (Core MVC + EF Core), so most of its skills will not need a `references/` split.
 
 ## Naming
 
@@ -143,7 +143,7 @@ kebab-case. Name the task, not the technology — `controller-action-results`, n
 Test a plugin locally without installing:
 ```bash
 claude --plugin-dir /path/to/dotnet-skills/plugins/dotnet-legacy
-claude --plugin-dir /path/to/dotnet-skills/plugins/dotnet-current
+claude --plugin-dir /path/to/dotnet-skills/plugins/dotnet-10
 ```
 After edits, run `/reload-plugins`.
 

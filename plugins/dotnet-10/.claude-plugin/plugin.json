@@ -1,5 +1,5 @@
 {
-  "name": "dotnet-current",
+  "name": "dotnet-10",
   "description": "Skills for ASP.NET Core MVC on .NET 10 with C# 14, Entity Framework Core 10, and modern .NET runtime patterns (DI, hosting, configuration, async).",
   "version": "0.1.0",
   "author": {
