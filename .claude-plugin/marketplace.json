@@ -1,14 +1,14 @@
 {
   "name": "dotnet-skills",
-  "description": "Claude Code marketplace for C#/.NET — two plugins: dotnet-legacy (.NET Framework 4.8 / C# 8.0) and dotnet-10 (.NET 10 / C# 14). Users install only the runtime they ship.",
+  "description": "Claude Code marketplace for C#/.NET — two plugins: dotnet-48 (.NET Framework 4.8 / C# 8.0) and dotnet-10 (.NET 10 / C# 14). Users install only the runtime they ship.",
   "owner": {
     "name": "marafiq",
     "url": "https://github.com/marafiq"
   },
   "plugins": [
     {
-      "name": "dotnet-legacy",
-      "source": "./plugins/dotnet-legacy",
+      "name": "dotnet-48",
+      "source": "./plugins/dotnet-48",
       "description": "ASP.NET MVC 5.3, Web Forms, EF6 on .NET Framework 4.8 (C# 8.0). Includes migration patterns toward ASP.NET Core.",
       "version": "0.1.0",
       "author": {

@@ -2,7 +2,7 @@
 
 Claude Code marketplace hosting **two plugins** for C#/.NET work. Users install only the runtime they actually ship to:
 
-- **`dotnet-legacy`** — ASP.NET MVC 5.3, Web Forms, EF6 on **.NET Framework 4.8** with **C# 8.0** (compiler subset; see caveats below). Includes migration patterns toward ASP.NET Core.
+- **`dotnet-48`** — ASP.NET MVC 5.3, Web Forms, EF6 on **.NET Framework 4.8** with **C# 8.0** (compiler subset; see caveats below). Includes migration patterns toward ASP.NET Core.
 - **`dotnet-10`** — ASP.NET Core MVC, EF Core on **.NET 10** with **C# 14**.
 
 ## Editorial standards (read first)
@@ -50,7 +50,7 @@ When concision and precision conflict, pay the words for precision.
 
 ## Scope per plugin
 
-### `dotnet-legacy`
+### `dotnet-48`
 Target: **.NET Framework 4.8** with **C# 8.0** (set `<LangVersion>8.0</LangVersion>` in csproj).
 
 In:
@@ -84,7 +84,7 @@ Blazor (Server / WebAssembly), Razor Pages, desktop UI (WPF, WinForms, MAUI, Ava
 .claude-plugin/
   marketplace.json            # lists both plugins
 plugins/
-  dotnet-legacy/
+  dotnet-48/
     .claude-plugin/
       plugin.json
     skills/<name>/
@@ -101,11 +101,11 @@ plugins/
     [agents/, commands/, hooks/, .mcp.json]
 ```
 
-`.claude-plugin/` directories hold **only** manifests. Components are auto-discovered from each plugin root. Installed namespaces are `/dotnet-legacy:<name>` and `/dotnet-10:<name>`.
+`.claude-plugin/` directories hold **only** manifests. Components are auto-discovered from each plugin root. Installed namespaces are `/dotnet-48:<name>` and `/dotnet-10:<name>`.
 
 ## Authoring
 
-The plugin choice already pins the runtime — you do not need to declare ".NET 4.8" or ".NET 10" in every skill description. Declare it only when a skill is variant-aware *within* its plugin (e.g. an MVC 5 vs Web Forms skill in `dotnet-legacy`).
+The plugin choice already pins the runtime — you do not need to declare ".NET 4.8" or ".NET 10" in every skill description. Declare it only when a skill is variant-aware *within* its plugin (e.g. an MVC 5 vs Web Forms skill in `dotnet-48`).
 
 ### Skill — `plugins/<plugin>/skills/<name>/SKILL.md`
 Frontmatter requires `name` (kebab-case, must match the folder) and `description` (the trigger — state *what* and *when*; front-load; capped at 1,536 chars combined with `when_to_use`). Body under ~500 lines; push detail into `references/`.
@@ -128,8 +128,8 @@ Only when the integration genuinely needs a server (auth flows, long-running con
 - Persistent state that must survive plugin updates → `CLAUDE_PLUGIN_DATA`. Auto-created on first reference; resolves under `~/.claude/plugins/data/{id}/`.
 
 ### Variant content within a plugin
-`dotnet-legacy` covers two web stacks (MVC 5 and Web Forms). When a skill applies to both, put per-variant detail in `references/<variant>.md` and let `SKILL.md` select. Slugs:
-- `mvc5.md`, `webforms.md` — web stack split inside `dotnet-legacy`
+`dotnet-48` covers two web stacks (MVC 5 and Web Forms). When a skill applies to both, put per-variant detail in `references/<variant>.md` and let `SKILL.md` select. Slugs:
+- `mvc5.md`, `webforms.md` — web stack split inside `dotnet-48`
 - `ef6.md`, `efcore.md` — only relevant for cross-stack skills, which should be rare given the plugin split
 
 `dotnet-10` is single-stack (Core MVC + EF Core), so most of its skills will not need a `references/` split.
@@ -142,7 +142,7 @@ kebab-case. Name the task, not the technology — `controller-action-results`, n
 
 Test a plugin locally without installing:
 ```bash
-claude --plugin-dir /path/to/dotnet-skills/plugins/dotnet-legacy
+claude --plugin-dir /path/to/dotnet-skills/plugins/dotnet-48
 claude --plugin-dir /path/to/dotnet-skills/plugins/dotnet-10
 ```
 After edits, run `/reload-plugins`.
