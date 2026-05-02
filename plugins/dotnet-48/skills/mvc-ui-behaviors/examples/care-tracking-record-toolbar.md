@@ -1,0 +1,239 @@
+---
+# ──────────────── Identity ────────────────
+id: care-tracking-record-toolbar
+title: "Care Tracking — Record Care commit toolbar"
+view: "unknown — fill when source arrives"
+control_type: toolbar
+
+routes:
+  - "/Care/Tracking/{communityId}/Record/{date}/List/{shiftId}"
+
+binding:
+  view_model: "unknown"
+  property: "unknown"
+
+# ──────────────── Population ────────────────
+data_source:
+  kind: api
+  reference: "Server-rendered HTML for the editor view; toolbar state is driven by client-side queue + SignalR pushes after commit."
+  populated_by: "unknown — fill when source arrives"
+  fields:
+    tasks_recorded: "int (advances via SignalR after commit; same value as the summary card)"
+    tasks_total: "int"
+    queue_count: "int (client-only; number of unsaved Completed / Not-Completed actions queued)"
+  default_value: null
+  pre_filled_from_server: false
+
+# ──────────────── Server-side business logic ────────────────
+business_logic:
+  selection:
+    rules:
+      - "The toolbar's 'X of Y recorded' counter reflects the count of completed care tasks for this shift on this date — same source as the summary card on /Care/Tracking/{communityId}."
+    code_refs: ["unknown — fill when source arrives"]
+
+  authorization_filters:
+    - rule: "User must have permission to record care for this shift (rule unknown — fill when source arrives)."
+      code_ref: "unknown"
+
+  computed_fields:
+    - name: "queue_count"
+      derivation: "Client-side: count of per-row actions (Completed / Not Completed) that have local state but haven't been committed. Reset to 0 on successful POST."
+      code_ref: "unknown — likely a JS handler attached to per-row buttons"
+
+  ordering: null    # toolbar has no listing
+  paging: null
+  soft_delete: null
+  temporal_scoping: "Bound to the {date} segment in the URL (the shift's date)."
+
+  user_visible_side_effects:
+    - kind: "audit_entry"
+      description: "Each task recorded likely writes an audit entry. Whether visible elsewhere is unknown."
+      code_ref: "unknown"
+    - kind: "signalr_push"
+      description: "POST returns 200 → server emits SignalR push on `stafftaskshub` → summary card counter on /Care/Tracking/{communityId} and any in-page progress indicators advance within ~1–3 s."
+      code_ref: "unknown — fill when source arrives"
+
+# ──────────────── Configuration ────────────────
+configuration:
+  required_indicator_convention: null
+  presence_condition: null
+  states:
+    - "queue_empty"          # button disabled-grey, no count
+    - "queue_pending"        # button active blue/green, shows '(N)' suffix
+    - "submitting"           # POST in flight (transient)
+    - "post_success"         # toast shown, button reverts to queue_empty
+
+  buttons:
+    - id: "record_prn_care"
+      label: "Record PRN Care"
+      role: "navigate"
+      target: "/Care/Tracking/{communityId}/RecordPrn/{date}/{shiftId}"  # observed pattern; URL form unverified
+    - id: "print"
+      label: "Print"
+      role: "export"
+      target: "unknown — fill when source arrives (likely opens browser print dialog or downloads PDF)"
+    - id: "record_care"
+      label: "Record Care"
+      label_template: "Record Care ({queue_count})"   # when queue is non-empty
+      role: "commit_batch"
+      enabled_when: "queue_count > 0"
+
+  empty_state: "When no tasks are queued, the Record Care button is disabled-grey with no count suffix. Counter still shows the persistent X of Y recorded."
+
+# ──────────────── Validation ────────────────
+validation: []
+
+# ──────────────── Reactivity ────────────────
+reactivity:
+  - event: "queue_changed (from per-task row Completed/Not Completed click)"
+    targets: [self]
+    action: "visual_state_change"
+    endpoint: null
+    settle_ms: 0
+    immediate_response: "Record Care button state recomputed from queue_count: enabled blue/green when > 0, label appends '({queue_count})'; disabled grey when 0. No network."
+    final_response: "Same as immediate."
+
+  - event: "click (Record Care, when queue_count > 0)"
+    targets: [self, "care-tracking-shift-summary-card", "global-toast-region"]
+    action: "submit"
+    endpoint:
+      method: POST
+      url: "/Care/Tracking/{communityId}/Record/{date}"
+      request_payload: "JSON: list of queued task records (resident id + task id + Completed/NotCompleted + minutes_taken + optional notes). Exact schema — unknown — fill when source arrives."
+      response_handling: "On 200: success toast emitted top-right ('Successfully recorded N outcomes' — observed for N=1; plural-form unverified). Local queue cleared; button reverts to queue_empty state."
+    settle_ms: 2500
+    immediate_response: "Toast appears; button reverts; counter does NOT update synchronously."
+    final_response: "Within ~1–3 s of the POST response, SignalR push from `stafftaskshub` advances the X-of-Y counter here AND on the summary card."
+
+  - event: "click (Record PRN Care)"
+    targets: ["care-tracking-record-prn-editor (separate slice — navigation)"]
+    action: navigate
+    endpoint:
+      method: GET
+      url: "/Care/Tracking/{communityId}/RecordPrn/{date}/{shiftId}"  # pattern unverified
+    settle_ms: null
+    immediate_response: "Full-page navigation."
+
+  - event: "click (Print)"
+    targets: []
+    action: "export"
+    endpoint:
+      method: "unknown"
+      url: "unknown — fill when source arrives"
+    immediate_response: "Likely opens browser print dialog or downloads a PDF/printable view. Behavior unverified."
+
+# ──────────────── Cross-slice ────────────────
+related_controls:
+  - id: care-tracking-shift-summary-card
+    relation: sibling           # same feature; coupled via SignalR push (not direct DOM)
+  - id: dashboard-community-selector
+    relation: scope_provider
+  - id: global-toast-region
+    relation: target            # this slice emits toasts to the global region
+
+scoped_by:
+  - dashboard-community-selector
+
+signal_sources:
+  - kind: signalr
+    detail: "After a successful POST, server fan-out via `stafftaskshub` updates the X-of-Y counter both here (in-page) and on the summary card (cross-page persistence). Hub method name + frame schema — unknown — fill when source arrives."
+
+on_close: null
+
+# ──────────────── Endpoints ────────────────
+endpoints:
+  - method: POST
+    url: "/Care/Tracking/{communityId}/Record/{date}"
+    purpose: "Commit queued task records for the shift on the given date."
+    requires_anti_forgery: "unknown — fill when source arrives"
+    response_kind: "json (returns success status; advancement of the counter comes via SignalR, not the response body)"
+    unverified: false           # endpoint URL + method observed in network during commit
+
+  - method: GET
+    url: "/Care/Tracking/{communityId}/RecordPrn/{date}/{shiftId}"
+    purpose: "Navigate to the PRN-care recording editor (separate flow)."
+    requires_anti_forgery: false
+    response_kind: html_full
+    unverified: true              # URL pattern guessed from the link; navigation not exercised
+
+  - method: "unknown"
+    url: "unknown — Print button target"
+    purpose: "Print or export the current shift's task list."
+    response_kind: "unknown"
+    unverified: true
+
+# ──────────────── Authorization ────────────────
+authorization:
+  presence_condition: "User must have permission to view Care Tracking for this community + shift. The toolbar is visible whenever the editor is reachable."
+  action_authorization:
+    - action: "commit_batch"
+      requires: "unknown — fill when source arrives (likely a CarePlan write permission)"
+      on_denied:
+        response_kind: "unknown"
+        user_sees: "unknown — likely the legacy generic-error toast pattern (HTML 403 → unparseable AJAX → 'ERROR / error' fallback; observed elsewhere in this app on +Incident click). Verify when an unauthorized user is available."
+        legacy_quirk: "Generic toast on unparseable HTML 403 response — see action_authorization.on_denied across the app."
+        rewrite_intent: "improve"
+  re_auth_required: false
+
+# ──────────────── Mode B helpers ────────────────
+url_conventions_observed:
+  - "/Care/Tracking/{communityId}/Record/{date} → POST endpoint to commit batch task records (verb-on-noun; date in path)"
+  - "/Care/Tracking/{communityId}/Record/{date}/List/{shiftId} → editor view URL (List/{shiftId} suffix — pattern observed elsewhere as discriminator for the visible list)"
+  - "/Care/Tracking/{communityId}/RecordPrn/{date}/{shiftId} → PRN navigation (pattern guessed; unverified)"
+
+unknowns_to_fill_when_source_arrives:
+  - "view: which Razor view file renders this toolbar?"
+  - "controller action that returns the editor view (likely a CareTrackingController action)"
+  - "POST request payload schema (currently described prose-only)"
+  - "anti-forgery requirement on POST /Record/{date}"
+  - "Print button's destination — print dialog vs PDF download vs new tab"
+  - "PRN navigation URL exact form"
+  - "stafftaskshub method name + payload schema for task-recorded push"
+  - "Permission requirement to commit (currently inferred only)"
+---
+
+# Care Tracking — Record Care commit toolbar
+
+## Behavior summary
+
+The toolbar at the top of the per-task editor (`/Care/Tracking/{communityId}/Record/{date}/List/{shiftId}`) holds three actions and a counter. Two actions navigate (Record PRN Care, Print). The third — **Record Care** — commits the local queue of per-row Completed / Not-Completed actions in a single POST. The button shows the queued count `Record Care (N)` when N > 0 and stays disabled-grey when N = 0. On successful commit, a top-right success toast appears, the queue clears, and within ~1–3 s a SignalR push on `stafftaskshub` advances the X-of-Y counter both here and on the parent shift summary card.
+
+## Code references
+
+(For human reviewers cross-checking the artifact.)
+
+- View: unknown — fill when source arrives.
+- Controller action that handles `POST /Care/Tracking/{communityId}/Record/{date}`: unknown — fill when source arrives.
+- SignalR Hub: `stafftaskshub` (negotiate URL observed; method name unknown).
+- Client-side queue logic for per-row Completed / Not-Completed clicks: unknown — fill when source arrives (likely a JS handler bundled with the editor view).
+
+## Edge cases
+
+- **Empty queue** — button disabled-grey, no count suffix, no POST possible.
+- **POST failure (network or server error)** — behavior unverified. Likely shows an error toast; queue may or may not retain its state. Worth verifying.
+- **Concurrent commit by another user** — both users' POSTs succeed independently; their respective summary-card counters advance via SignalR. Race condition unlikely but un-verified.
+- **Stale community / date** — switching the global community selector reloads the page; queue is lost. Not explicitly tested.
+- **Permission denied for commit** — likely the same legacy generic-error-toast pattern observed on `+ Incident` (HTML 403 response that AJAX can't parse → falls back to generic toast). Rewrite intent: improve to actionable message.
+- **Browser refresh mid-commit** — POST may complete but client never gets the response; SignalR push still advances counters, so the next page load sees the post-commit state. Outcome from the user's perspective: action succeeded silently. Verifiable; not tested.
+
+## Verification claims
+
+1. **Initial render with empty queue** — `Record Care` button disabled-grey, no count suffix; counter shows persistent X-of-Y for the shift.
+2. **Queue advance on per-row click** — clicking Completed on a per-row form (no network) increments the toolbar's queued count; button changes to active blue/green and label reads `Record Care ({queue_count})`. No network call fires.
+3. **Commit POST** — clicking `Record Care` with `queue_count > 0` fires `POST /Care/Tracking/{communityId}/Record/{date}` with a JSON payload representing the queued actions.
+4. **Success toast** — on POST 200, a top-right toast appears with text matching *"Successfully recorded N outcomes"* (observed N=1; plural form unverified).
+5. **Queue clears on success** — after the POST 200, the button reverts to disabled-grey and any per-row Reset link disappears.
+6. **Counter advances via SignalR (settle window 1–3 s)** — within 1–3 s of the POST response, the X-of-Y counter advances by `queue_count` (verified for N=1: counter went from "0 of 4" to "1 of 4").
+7. **Cross-slice signal to summary card** — same SignalR push advances the counter on `care-tracking-shift-summary-card` at `/Care/Tracking/{communityId}`. Verified by navigating to summary after commit; counter persisted as "1 of 4".
+8. **PRN navigation** — clicking `Record PRN Care` navigates to a separate PRN editor URL (exact pattern unverified).
+
+## Verification log
+
+- 2026-05-02 — initial Mode-B artifact drafted from browser observation. Claims 2, 3, 4, 5, 6, 7 verified during exploration. Claim 1 verified by initial-load observation. Claim 8 inferred from link presence; navigation not exercised.
+
+## Linked artifacts in this feature
+
+- [`care-tracking-shift-summary-card.md`](care-tracking-shift-summary-card.md) — sibling slice on `/Care/Tracking/{communityId}`. Receives the same SignalR push that advances this slice's counter.
+- (Future) `care-tracking-per-task-row.md` — child slice; the per-row Completed / Not-Completed forms feeding this toolbar's queue.
+- (Future) `care-tracking-filter-bar.md` — sibling slice on the editor view (Residents / Care Items / Room / Product Type filters).
+- (Future) `dashboard-community-selector.md` — `scope_provider` for every Care Tracking slice.
