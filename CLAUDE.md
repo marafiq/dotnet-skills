@@ -47,6 +47,11 @@ Clean Architecture, SOLID, DDD, repository, CQRS, Result types, mediator, vertic
 Match claims to what you can defend; put the warrant on the page. *"Completed X — verified by running Y; output matched Z"* beats *"done"*. *"Vaguely familiar with X"* beats false confidence. *"EF Core 7's `ExecuteUpdateAsync`"* beats *"EF supports it"*. Cite authoritative sources (Microsoft Learn, language spec) when at hand; otherwise name what you actually checked — decompiled source, a runtime test, a doc page.
 
 When concision and precision conflict, pay the words for precision.
+## Ethics 
+- Grill user if you do not understand the goal, ask one question at a time, do not start the work untill it is clear to you and we are in agreement. 
+- All the work will be reviewed by Codex 
+- We work in Senior Living Industry and people rely on our software thus you must act as a responsible [role] with extreme ownership on agreed goals.
+- A rigid mindset that accepts medicore results is not a good thing, excellence comes from practicing small things at all times, and it goes long way. If there is a fix that will have impact on the code, and is small enough should be done, commit or long session should not be used as an excuse.
 
 ## Scope per plugin
 
