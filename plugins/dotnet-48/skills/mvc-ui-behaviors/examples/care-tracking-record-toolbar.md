@@ -5,6 +5,17 @@ title: "Care Tracking — Record Care commit toolbar"
 view: "unknown — fill when source arrives"
 control_type: toolbar
 
+# ──────────────── Contract status ────────────────
+contract_status: incomplete
+contract_status_reason: >
+  Mutating slice with required failure_matrix cells at status: unknown
+  (http_4xx, http_5xx, network_timeout, double_click_or_resubmit,
+  retry_after_failure, partial_success, idempotency_strategy,
+  queue_retention on failure). Tenant tamper_matrix scenarios untested
+  (route, body, foreign-key ownership). Endpoint verification has
+  payload_schema, error_shape, anti_forgery, authorization at unknown.
+  Source-fill or testing required before this slice is contract-complete.
+
 routes:
   - "/Care/Tracking/{communityId}/Record/{date}/List/{shiftId}"
 
@@ -199,28 +210,103 @@ authorization:
     context_sources:
       - "url_path: /Care/Tracking/{communityId}/Record/{date}/List/{shiftId}"
       - "session: CurrentCommunityId (assumed; legacy MVC default — verify when source arrives)"
-    validation_rule: "URL-path communityId must match session-bound CurrentCommunityId AND user must have a community grant. POST {communityId} must match the URL the user navigated to."
-    mismatch_behavior: "Likely 403 / Unauthorized HTML page from server; AJAX falls through to generic error toast (observed pattern)."
-    denied_response: html_full
-    revocation_behavior: "If user grant revoked mid-edit, next POST fails — queue retention behavior unverified."
-    tamper_test_evidence: "unverified — must exercise: (a) tampered URL communityId, (b) tampered POST body communityId differing from URL, (c) tampered POST body resident_id belonging to another community"
+    tamper_matrix:
+      - endpoint: "POST /Care/Tracking/{communityId}/Record/{date}"
+        scenarios:
+          - kind: route_tenant_mismatch
+            baseline_context: "Authenticated user with grant for community A; queue contains 1 task record."
+            tampered_input: "Manually edit URL communityId to community B (user has no grant); submit Record Care."
+            expected_status: "deny"
+            expected_shape: html_full
+            observed_result: "untested"
+            source_refs: ["unknown"]
+            status: unknown
+
+          - kind: body_tenant_mismatch
+            baseline_context: "Authenticated user with grant for community A; URL is /Care/Tracking/A/Record/{date}."
+            tampered_input: "Intercept POST body and replace communityId field with community B; submit."
+            expected_status: "deny"
+            expected_shape: html_full
+            observed_result: "untested"
+            source_refs: ["unknown"]
+            status: unknown
+
+          - kind: foreign_key_ownership
+            baseline_context: "Authenticated user with grant for community A; URL/session both A."
+            tampered_input: "POST body carries resident_id or task_id belonging to community B (different tenant)."
+            expected_status: "deny"
+            expected_shape: html_full
+            observed_result: "untested"
+            source_refs: ["unknown"]
+            status: unknown
+
+          - kind: revoked_grant
+            baseline_context: "User initially has grant for community A; admin revokes mid-session."
+            tampered_input: "User submits a queued Record Care from the (now-stale) editor in community A."
+            expected_status: "deny"
+            expected_shape: html_full
+            observed_result: "untested"
+            source_refs: ["unknown"]
+            status: unknown
+
+          - kind: read_vs_write
+            baseline_context: "User has grant to view community A but not to record care (presence-time vs action-time auth)."
+            tampered_input: "User clicks Record Care after queueing tasks they could view."
+            expected_status: "deny"
+            expected_shape: html_full
+            observed_result: "untested — likely the legacy generic-error toast pattern"
+            source_refs: ["unknown"]
+            status: unknown
 
 # ──────────────── Failure matrix ────────────────
-# This slice is mutating — failure_matrix is REQUIRED.
-# Many cells remain unverified; that's acceptable in Mode B but they
-# cannot be silently omitted. The rewrite must answer each before contract-complete.
+# Mutating slice — failure_matrix is REQUIRED. Each cell carries
+# status + behavior + evidence. Cells at status: unknown for required
+# write semantics force contract_status: incomplete.
 failure_matrix:
-  http_4xx:                  "Unverified. 403 likely yields the generic-error toast (legacy quirk). 422 (validation) — unknown response shape. Worth flagging for rewrite to return ProblemDetails JSON."
-  http_5xx:                  "Unverified. Likely a generic ASP.NET error rendered into the toast slot or a full-page YSOD."
-  network_timeout:           "Unverified. Client likely shows a generic error or no feedback. **Real risk**: user re-clicks → potential duplicate POST without idempotency."
-  double_click_or_resubmit:  "Unverified. No client-side debounce observed. **Real risk**: a fast double-click could submit the queue twice. Idempotency strategy unknown — see below."
-  retry_after_failure:       "Unverified. Queue retention on failure is unclear — does the queue stay populated so the user can re-click? Or is it cleared regardless?"
-  partial_success:           "Unverified. If 3 of 5 batch items succeed and 2 fail, what does the user see? Are the 2 retained in the queue? Toast may show ambiguous count."
-  refresh_mid_flight:        "Unverified. POST may complete server-side; SignalR push still advances counters; client never sees the response. Outcome from user's perspective: action succeeded silently. Acceptable but worth confirming."
-  context_switch_mid_edit:   "Switching the community selector while the queue has items silently discards the queue (observed in dashboard-community-selector edge cases). **Real concern.**"
-  push_disconnect:           "If SignalR drops during the 1–3 s settle window, the counter advancement may be missed entirely. The POST itself succeeds; only the live UI feedback is lost. Refresh recovers."
-  idempotency_strategy:      "unknown — natural_idempotent (servers may dedupe by resident_id+task_id+date), client_dedupe_token (unobserved), or none. **Critical to confirm before rewrite.**"
-  queue_retention:           "Cleared on success (observed). On failure: unknown — fill when source or test data is available."
+  http_4xx:
+    status:   unknown
+    behavior: "403 likely yields the generic-error toast (legacy quirk; observed elsewhere on +Incident click). 422 (validation) — response shape unknown. Worth flagging for rewrite to return ProblemDetails JSON with field-level errors."
+    evidence: "untested"
+  http_5xx:
+    status:   unknown
+    behavior: "Likely a generic ASP.NET error rendered into the toast slot or a full-page YSOD; client AJAX cannot parse and falls back to generic toast."
+    evidence: "untested"
+  network_timeout:
+    status:   unknown
+    behavior: "Client likely shows generic error or no feedback. Real risk: user re-clicks → potential duplicate POST without idempotency."
+    evidence: "untested"
+  double_click_or_resubmit:
+    status:   unknown
+    behavior: "No client-side debounce observed. Real risk: a fast double-click could submit the queue twice. Idempotency strategy unknown."
+    evidence: "untested — must exercise with two rapid clicks under network throttling"
+  retry_after_failure:
+    status:   unknown
+    behavior: "Queue retention on failure is unclear — does the queue stay populated so the user can re-click? Or is it cleared regardless?"
+    evidence: "untested — must exercise by forcing a 500 response"
+  partial_success:
+    status:   unknown
+    behavior: "If 3 of 5 batch items succeed and 2 fail, behavior unverified. Are the 2 retained in the queue? Toast may show ambiguous count."
+    evidence: "untested"
+  refresh_mid_flight:
+    status:   unknown
+    behavior: "POST may complete server-side; SignalR push still advances counters; client never sees the response. User's perspective: action appears to have succeeded silently. Acceptable but worth confirming there's no double-write on retry."
+    evidence: "untested"
+  context_switch_mid_edit:
+    status:   observed
+    behavior: "Switching the community selector while the queue has items silently discards the queue (observed at dashboard-community-selector). No confirmation prompt; data loss is silent. rewrite_intent: improve."
+    evidence: "Observed during exploration: queue cleared without prompt on community switch."
+  push_disconnect:
+    status:   unknown
+    behavior: "If SignalR drops during the 1–3 s settle window, the counter advancement may be missed entirely. The POST itself succeeds; only the live UI feedback is lost. Refresh recovers, but stale counter persists between."
+    evidence: "untested — must exercise by killing the WebSocket mid-flight"
+  idempotency_strategy:
+    status:   unknown
+    behavior: "Possibilities: natural_idempotent (server dedupes by resident_id+task_id+date), client_dedupe_token (no client evidence observed), or none. Critical to confirm before rewrite."
+    evidence: "untested — must exercise via deliberate double-submit"
+  queue_retention:
+    status:   observed_partial
+    behavior: "On success: queue cleared (observed). On failure: behavior unknown. On context switch: queue cleared without prompt (observed)."
+    evidence: "Success path observed during exploration. Failure path untested."
 
 # ──────────────── Mode B helpers ────────────────
 url_conventions_observed:
@@ -243,12 +329,10 @@ unknowns_to_fill_when_source_arrives:
   - "All `failure_matrix` cells currently marked 'Unverified' must be confirmed"
   - "tenant_boundary.tamper_test_evidence — exercise tamper scenarios"
 
-extensions:
-  - "event: queue_changed — sanctioned addition (custom event for client-side state mutation)"
-  - "action: commit_batch — sanctioned"
-  - "action: visual_state_change — sanctioned"
-  - "action: navigate — sanctioned"
-  - "action: export — sanctioned"
+# All action and event values used in this artifact are sanctioned by the
+# template; nothing to register as a proposed extension. Block left empty
+# to make that explicit.
+extensions: []
 ---
 
 # Care Tracking — Record Care commit toolbar

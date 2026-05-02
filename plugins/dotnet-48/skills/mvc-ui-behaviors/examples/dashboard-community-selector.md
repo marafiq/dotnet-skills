@@ -5,6 +5,15 @@ title: "Community / facility selector"
 view: "unknown — fill when source arrives"
 control_type: context_selector
 
+# ──────────────── Contract status ────────────────
+contract_status: incomplete
+contract_status_reason: >
+  Tenant tamper_matrix scenarios untested (selecting a community the
+  user does not have a grant for via tampered POST body; behavior on
+  zero grants; behavior when grant is revoked mid-session). Selection
+  endpoint URL/method/payload schema all unknown — fill when source
+  arrives. failure_matrix cells largely unverified.
+
 # Appears on every authenticated page in the app — global header element.
 routes:
   - "*"
@@ -160,28 +169,84 @@ authorization:
     context_sources:
       - "session: CurrentCommunityId (assumed; legacy MVC default — verify when source arrives)"
       - "url_path: many app routes carry community id (e.g. /Care/Tracking/{communityId}) — server presumably validates these match the session value"
-    validation_rule: "URL-path community id must match the session-bound CurrentCommunityId; mismatch should yield 403. Unverified — fill when source arrives."
-    mismatch_behavior: "unverified — likely returns the legacy 'Unauthorized' HTML page (observed elsewhere in this app on permission denials)"
-    denied_response: html_full
-    revocation_behavior: "If a user's grant to the current community is revoked mid-session, the next request scoped to that community is presumed to 403. Behavior not explicitly tested."
-    tamper_test_evidence: "unverified — should be exercised by manually editing a tenant id in the URL to a community the user does not have access to and confirming the deny path"
+    tamper_matrix:
+      - endpoint: "<unknown — community-switch endpoint>"
+        scenarios:
+          - kind: body_tenant_mismatch
+            baseline_context: "Authenticated user with grants for communities A and B."
+            tampered_input: "Submit selection POST with communityId field set to community C (no grant)."
+            expected_status: "deny"
+            expected_shape: "unknown — fill when source arrives"
+            observed_result: "untested"
+            source_refs: ["unknown"]
+            status: unknown
+
+          - kind: revoked_grant
+            baseline_context: "User had grant for community A; admin revokes; selector shows A as currently-selected."
+            tampered_input: "User clicks selector to refresh state, or navigates to a scoped page."
+            expected_status: "deny"
+            expected_shape: html_full
+            observed_result: "untested"
+            source_refs: ["unknown"]
+            status: unknown
+
+          - kind: route_tenant_mismatch
+            baseline_context: "Selector currently set to community A in session."
+            tampered_input: "User manually navigates to /Care/Tracking/{B} where B is granted but session reads A."
+            expected_status: "allow with implicit context update OR deny — behavior unknown"
+            expected_shape: "unknown"
+            observed_result: "untested"
+            source_refs: ["unknown"]
+            status: unknown
 
 # ──────────────── Failure matrix ────────────────
-# Selection itself is mutating in the sense that it changes server-side state.
-# The reload that follows is the user's evidence of success. Failures are
-# rare in practice for selection but worth capturing.
+# Selection POST is mutating in the sense that it changes server-side
+# tenant-context state.
 failure_matrix:
-  http_4xx:                  "If selection POST returns 4xx, page may stay or partially navigate; behavior unverified."
-  http_5xx:                  "Same — unverified."
-  network_timeout:           "Likely the dropdown closes but no reload happens; user may not realize selection didn't take. Worth flagging for rewrite."
-  double_click_or_resubmit:  "User clicks two options quickly — last-write-wins assumed; verify."
-  retry_after_failure:       "User can re-open the dropdown and try again; no explicit retry affordance."
-  partial_success:           "n/a — single-record state change."
-  refresh_mid_flight:        "Browser refresh during selection POST — outcome depends on whether the server already wrote the new community to session. Unverified."
-  context_switch_mid_edit:   "Switching community while a per-task editor has queued local state silently discards the queue (observed elsewhere)."
-  push_disconnect:           "n/a — no SignalR involvement on this slice."
-  idempotency_strategy:      "natural_idempotent (selecting the same community twice is a no-op)"
-  queue_retention:           "n/a — no client-side queue here, but discards downstream queues on switch (see context_switch_mid_edit)"
+  http_4xx:
+    status:   unknown
+    behavior: "If selection POST returns 4xx, page may stay or partially navigate; behavior unverified."
+    evidence: "untested"
+  http_5xx:
+    status:   unknown
+    behavior: "Likely the dropdown closes but no reload happens; user may not realize selection didn't take."
+    evidence: "untested"
+  network_timeout:
+    status:   unknown
+    behavior: "Likely the dropdown closes but no reload happens; user may not realize selection didn't take. Worth flagging for rewrite."
+    evidence: "untested"
+  double_click_or_resubmit:
+    status:   unknown
+    behavior: "User clicks two options quickly — last-write-wins assumed; selection POST may race with reload."
+    evidence: "untested"
+  retry_after_failure:
+    status:   observed_partial
+    behavior: "User can re-open the dropdown and try again; no explicit retry affordance."
+    evidence: "Observed: dropdown can be re-opened after dismissing."
+  partial_success:
+    status:   n/a
+    behavior: "n/a — single-record state change."
+    evidence: "n/a"
+  refresh_mid_flight:
+    status:   unknown
+    behavior: "Browser refresh during selection POST — outcome depends on whether the server already wrote the new community to session."
+    evidence: "untested"
+  context_switch_mid_edit:
+    status:   observed
+    behavior: "Switching community while a per-task editor has queued local state silently discards the queue (no confirmation prompt). rewrite_intent: improve."
+    evidence: "Observed during exploration."
+  push_disconnect:
+    status:   n/a
+    behavior: "n/a — no SignalR involvement on this slice."
+    evidence: "n/a"
+  idempotency_strategy:
+    status:   inferred
+    behavior: "natural_idempotent — selecting the same community twice is a no-op (the server-side state is already that community)."
+    evidence: "Inferred from the always-shows-current-selection behavior; unverified."
+  queue_retention:
+    status:   n/a
+    behavior: "n/a — no client-side queue on this slice. Downstream queues are discarded on switch (see context_switch_mid_edit)."
+    evidence: "n/a"
 
 # ──────────────── Mode B helpers ────────────────
 url_conventions_observed:
@@ -198,13 +263,10 @@ unknowns_to_fill_when_source_arrives:
   - "Whether any unsaved-changes guard exists before discarding pending work on community switch"
   - "Whether URL-path community id is server-validated against session — and if so, the exact denial path"
 
-extensions:
-  - "action: open_dropdown — sanctioned"
-  - "action: filter_options — sanctioned"
-  - "action: scope_change — sanctioned"
-  - "event: type — sanctioned"
-  - "event: select — sanctioned"
-  - "event: dismiss — sanctioned"
+# All event/action values used in this artifact are sanctioned by the
+# template (open_dropdown, filter_options, scope_change, type, select,
+# dismiss are all in the canonical enum lists). Block left empty.
+extensions: []
 ---
 
 # Community / facility selector

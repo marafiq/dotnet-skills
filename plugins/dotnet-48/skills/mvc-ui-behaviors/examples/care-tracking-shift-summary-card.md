@@ -5,6 +5,16 @@ title: "Care Tracking — Shift Summary Card"
 view: "unknown — fill when source arrives"
 control_type: card
 
+# ──────────────── Contract status ────────────────
+contract_status: incomplete
+contract_status_reason: >
+  Read-only slice scoped by community. Tenant tamper_matrix
+  scenarios untested (route-path tamper to other community,
+  revoked-grant). Endpoint verification still has error_shape
+  and authorization at unknown for the GET. Push-disconnect
+  failure-matrix cell unobserved. Source-fill or testing
+  required before contract-complete.
+
 routes:
   - "/Care/Tracking/{communityId}"
 
@@ -189,27 +199,88 @@ authorization:
     context_sources:
       - "url_path: /Care/Tracking/{communityId}"
       - "session: CurrentCommunityId (assumed; legacy MVC default — verify when source arrives)"
-    validation_rule: "URL-path communityId must match the session-bound CurrentCommunityId AND the user must have a grant for that community. Unverified — fill when source arrives."
-    mismatch_behavior: "Likely 403 / Unauthorized HTML page (observed pattern elsewhere in app)."
-    denied_response: html_full
-    revocation_behavior: "If a user's grant is revoked mid-session, next visit to this URL is presumed to 403. Untested."
-    tamper_test_evidence: "unverified — must be exercised by visiting `/Care/Tracking/{otherCommunity}` for a community the user lacks access to"
+    tamper_matrix:
+      - endpoint: "GET /Care/Tracking/{communityId}"
+        scenarios:
+          - kind: route_tenant_mismatch
+            baseline_context: "Authenticated user with grant for community A."
+            tampered_input: "Manually navigate to /Care/Tracking/{B} where the user has no grant for B."
+            expected_status: "deny"
+            expected_shape: html_full
+            observed_result: "untested — likely the legacy 'Unauthorized' HTML page (observed pattern elsewhere)"
+            source_refs: ["unknown"]
+            status: unknown
+
+          - kind: revoked_grant
+            baseline_context: "User initially has grant for community A; admin revokes mid-session."
+            tampered_input: "User refreshes /Care/Tracking/A or navigates back to it."
+            expected_status: "deny"
+            expected_shape: html_full
+            observed_result: "untested"
+            source_refs: ["unknown"]
+            status: unknown
+
+          - kind: read_vs_write
+            baseline_context: "User has read-only grant for community A (can view, not record)."
+            tampered_input: "User views the summary card; observation: are tasks_recorded counts visible without write permission?"
+            expected_status: "allow (read), deny on attempted Record Care navigation"
+            expected_shape: n/a
+            observed_result: "untested"
+            source_refs: ["unknown"]
+            status: unknown
 
 # ──────────────── Failure matrix ────────────────
-# This slice is read-only — no mutating endpoints — so most failure-matrix
-# cells are n/a. SignalR-related cells matter because the counter depends on it.
+# Read-only slice — most cells are n/a. SignalR-related cells matter because
+# the counter depends on it.
 failure_matrix:
-  http_4xx:                  "If the GET returns 403, the user sees the legacy 'Unauthorized' page. If 404, behavior unverified."
-  http_5xx:                  "Standard ASP.NET error page; legacy YSOD or generic error view. Unverified."
-  network_timeout:           "Page fails to render; browser standard error. n/a for behavioral contract."
-  double_click_or_resubmit:  "n/a — read-only view."
-  retry_after_failure:       "Browser refresh."
-  partial_success:           "n/a — read-only."
-  refresh_mid_flight:        "n/a — initial GET; refresh restarts the request."
-  context_switch_mid_edit:   "n/a — no edit state on this slice."
-  push_disconnect:           "If SignalR connection drops, the counter stops advancing. Page refresh re-establishes; the displayed count then reflects current server state. Worth flagging for rewrite — the user has no in-page indicator that the live counter is stale."
-  idempotency_strategy:      "n/a — no mutation."
-  queue_retention:           "n/a"
+  http_4xx:
+    status:   unknown
+    behavior: "If the GET returns 403, the user sees the legacy 'Unauthorized' page. If 404, behavior unverified."
+    evidence: "untested"
+  http_5xx:
+    status:   unknown
+    behavior: "Standard ASP.NET error page; legacy YSOD or generic error view."
+    evidence: "untested"
+  network_timeout:
+    status:   n/a
+    behavior: "Page fails to render; browser standard error. n/a for behavioral contract."
+    evidence: "n/a"
+  double_click_or_resubmit:
+    status:   n/a
+    behavior: "n/a — read-only view."
+    evidence: "n/a"
+  retry_after_failure:
+    status:   n/a
+    behavior: "Browser refresh."
+    evidence: "n/a"
+  partial_success:
+    status:   n/a
+    behavior: "n/a — read-only."
+    evidence: "n/a"
+  refresh_mid_flight:
+    status:   n/a
+    behavior: "n/a — initial GET; refresh restarts the request."
+    evidence: "n/a"
+  context_switch_mid_edit:
+    status:   n/a
+    behavior: "n/a — no edit state on this slice."
+    evidence: "n/a"
+  push_disconnect:
+    status:   unknown
+    behavior: "If SignalR connection drops, the counter stops advancing. Page refresh re-establishes; the displayed count then reflects current server state. Worth flagging for rewrite — the user has no in-page indicator that the live counter is stale."
+    evidence: "untested — must exercise by killing the WebSocket and recording a task in the editor"
+  idempotency_strategy:
+    status:   n/a
+    behavior: "n/a — no mutation."
+    evidence: "n/a"
+  queue_retention:
+    status:   n/a
+    behavior: "n/a — no mutation."
+    evidence: "n/a"
+
+# ──────────────── Schema extensions ────────────────
+# All values used in this artifact are sanctioned. Empty.
+extensions: []
 
 # ──────────────── Mode B helpers ────────────────
 url_conventions_observed:

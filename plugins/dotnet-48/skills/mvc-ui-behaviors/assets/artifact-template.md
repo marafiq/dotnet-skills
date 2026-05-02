@@ -4,7 +4,24 @@ id: <kebab-case slug, e.g. care-tracking-record-toolbar>
 title: <human-readable name>
 view: <path/to/View.cshtml | "unknown — fill when source arrives">
 view_lines: <e.g. 42-78, optional>
-control_type: <dropdown | textbox | textarea | checkbox | radio | grid | form | modal | drawer | wizard | wizard_step | toolbar | accordion | tab_set | side_menu | breadcrumb | datepicker | daterange | autocomplete | masked_input | numeric_input | toggle_buttons | rich_text | file_upload | loading_indicator | toast | confirmation_dialog | alert | paginator | pane | context_selector | custom>
+control_type: <dropdown | textbox | textarea | checkbox | radio | grid | form | modal | drawer | wizard | wizard_step | toolbar | accordion | tab_set | side_menu | breadcrumb | datepicker | daterange | autocomplete | masked_input | numeric_input | toggle_buttons | rich_text | file_upload | loading_indicator | toast | confirmation_dialog | alert | paginator | pane | context_selector | card | custom>
+
+# ──────────────── Contract status ────────────────
+# `complete` only when:
+#   - All required `failure_matrix` cells (for slices with mutating endpoints)
+#     have status ∈ {source_confirmed, observed} (NOT unknown).
+#   - All required `tenant_boundary.tamper_matrix` scenarios (for scoped or
+#     tenant-routed slices) have status ∈ {source_confirmed, observed}.
+#   - All `endpoints[].verification` aspects relevant to the endpoint's role
+#     are at status ∈ {source_confirmed, observed, observed_partial, n/a}
+#     (NOT unknown).
+#   - All required validation messages, business_logic.selection.rules, and
+#     authorization.action_authorization entries are non-null.
+# Otherwise: `incomplete`. Each gating gap is listed in `contract_status_reason`.
+# A fresh LLM session producing this artifact at scale must NOT mark
+# contract_status: complete unless those preconditions hold.
+contract_status: <complete | incomplete>
+contract_status_reason: <prose: which required cells/scenarios are unknown or untested; what evidence is missing>
 
 # URLs where the user encounters this slice (same in legacy and rewrite — routes are preserved).
 # Use route-pattern syntax with named parameters; multiple entries when the slice appears in more than one place.
@@ -296,24 +313,28 @@ on_close:
 # ──────────────── Endpoints ────────────────
 # Per-aspect verification. URL+method observed in the network is NOT enough
 # to call an endpoint "verified" — especially for mutating writes. Each
-# aspect carries its own confirmation state. An overall "verified" status
-# requires every relevant aspect to be source-confirmed (or explicitly
-# marked not-applicable for read-only endpoints).
+# aspect carries its own confirmation state. The full enum (canonical here):
+#   unknown          — no information yet
+#   observed         — exercised in browser; outcome captured
+#   observed_partial — partially exercised (e.g. one path traced, others not)
+#   source_confirmed — confirmed in source code
+#   n/a              — not applicable for this endpoint kind (e.g. anti_forgery for GET)
 endpoints:
   - method: <GET | POST | PUT | DELETE>
     url: <route path>
     purpose: <prose>
     response_kind: <html_full | html_partial | json | json_problem_details | redirect>
     verification:
-      method:           <observed | source_confirmed>
-      route:            <observed | source_confirmed>
-      payload_schema:   <unknown | observed_partial | source_confirmed>
-      response_shape:   <unknown | observed_partial | source_confirmed>
-      error_shape:      <unknown | observed_partial | source_confirmed>
-      anti_forgery:     <unknown | observed | source_confirmed>
-      authorization:    <unknown | observed | source_confirmed>
+      method:           <unknown | observed | observed_partial | source_confirmed | n/a>
+      route:            <unknown | observed | observed_partial | source_confirmed | n/a>
+      payload_schema:   <unknown | observed | observed_partial | source_confirmed | n/a>
+      response_shape:   <unknown | observed | observed_partial | source_confirmed | n/a>
+      error_shape:      <unknown | observed | observed_partial | source_confirmed | n/a>
+      anti_forgery:     <unknown | observed | observed_partial | source_confirmed | n/a>
+      authorization:    <unknown | observed | observed_partial | source_confirmed | n/a>
     # For mutating endpoints (POST/PUT/DELETE), the failure_matrix below
-    # MUST be populated before the endpoint is treated as contract-complete.
+    # MUST be populated; required cells with status: unknown gate the slice
+    # to contract_status: incomplete.
 
 # ──────────────── Authorization ────────────────
 authorization:
@@ -330,38 +351,125 @@ authorization:
   re_auth_for: [<action slugs>]
 
   # ── Tenant boundary (REQUIRED for any slice scoped_by a context selector
-  #    or whose endpoints carry a tenant id in the route)
+  #    or whose endpoints carry a tenant id in the route).
+  #
+  # Replaced free-form prose with a structured tamper matrix per endpoint.
+  # Required scenarios (each must appear at status source_confirmed or
+  # observed before the endpoint is contract-complete):
+  #   - route_tenant_mismatch   — URL tenant id ≠ session/permitted tenant
+  #   - body_tenant_mismatch    — POST body carries a tenant id ≠ URL
+  #   - foreign_key_ownership   — POST body references an entity (resident_id,
+  #                               task_id, …) belonging to a different tenant
+  #   - revoked_grant           — user's grant revoked mid-session
+  #   - read_vs_write           — read vs write denial behavior may differ
   tenant_boundary:
-    context_sources: [<e.g. "url_path: /Care/Tracking/{communityId}", "session: CurrentCommunityId", "cookie: alis_community", "claim: tenant_id">]
-    validation_rule: <prose: "URL communityId must match session-bound CurrentCommunityId; mismatch → 403">
-    mismatch_behavior: <prose: "what the user sees if URL tenant ≠ session tenant">
-    denied_response: <html_full | json_problem_details | redirect>
-    revocation_behavior: <prose: "what happens if user's grant is revoked mid-session">
-    tamper_test_evidence: <prose: how this was verified, or "unverified — fill when source arrives">
+    context_sources: [<"url_path: /Care/Tracking/{communityId}", "session: CurrentCommunityId", "cookie: alis_community", "claim: tenant_id">]
+    tamper_matrix:
+      - endpoint: <endpoint url or id>
+        scenarios:
+          - kind: <route_tenant_mismatch | body_tenant_mismatch | foreign_key_ownership | revoked_grant | read_vs_write>
+            baseline_context: <prose: authorized starting state>
+            tampered_input: <prose: what was changed>
+            expected_status: <int | "deny" | "allow">
+            expected_shape: <html_full | json_problem_details | redirect | n/a>
+            observed_result: <prose | "untested">
+            source_refs: [<code_ref or "unknown">]
+            status: <unknown | observed | source_confirmed>
 
 # ──────────────── Failure matrix (REQUIRED for any slice with mutating endpoints) ────────────────
-# Mutating slices (commit toolbars, form submits, batch operations, drag-drop
-# persistence) must answer each cell. Leaving cells "unknown" is acceptable in
-# Mode B, but they cannot be silently omitted.
+# Each cell is structured: status + behavior + evidence. Cells at status:
+# unknown for required mutating-write semantics force contract_status:
+# incomplete at the artifact level.
+#
+# Required cells for mutating slices: http_4xx, http_5xx, network_timeout,
+# double_click_or_resubmit, retry_after_failure, partial_success,
+# refresh_mid_flight, context_switch_mid_edit, push_disconnect,
+# idempotency_strategy, queue_retention.
+#
+# Cells legitimately n/a are marked status: n/a (e.g. push_disconnect on a
+# slice with no SignalR involvement; partial_success on a non-batch endpoint).
 failure_matrix:
-  http_4xx:                  <prose: how the user sees a 400/403/422 response>
-  http_5xx:                  <prose: how the user sees a 500>
-  network_timeout:           <prose: client-side handling, retry, message shown>
-  double_click_or_resubmit:  <prose: idempotency — does a second click queue, replay, or no-op?>
-  retry_after_failure:       <prose: explicit retry path, automatic retry, or none>
-  partial_success:           <prose: what if 3 of 5 batch items save, 2 fail>
-  refresh_mid_flight:        <prose: client refreshes browser before response arrives>
-  context_switch_mid_edit:   <prose: user changes community/date while local queue has data>
-  push_disconnect:           <prose: SignalR connection drops mid-flight; does counter stay stale?>
-  idempotency_strategy:      <none | client_dedupe_token | server_idempotency_key | natural_idempotent>
-  queue_retention:           <prose: client queue cleared on success only? on submit attempt? per-row immediately?>
+  http_4xx:
+    status:   <unknown | observed | source_confirmed | n/a>
+    behavior: <prose: how the user sees a 400/403/422 response>
+    evidence: <code_ref or test_id or "untested">
+  http_5xx:
+    status:   <unknown | observed | source_confirmed | n/a>
+    behavior: <prose: how the user sees a 500>
+    evidence: <code_ref or test_id or "untested">
+  network_timeout:
+    status:   <unknown | observed | source_confirmed | n/a>
+    behavior: <prose: client-side handling, retry, message shown>
+    evidence: <code_ref or test_id or "untested">
+  double_click_or_resubmit:
+    status:   <unknown | observed | source_confirmed | n/a>
+    behavior: <prose: idempotency — does a second click queue, replay, or no-op?>
+    evidence: <code_ref or test_id or "untested">
+  retry_after_failure:
+    status:   <unknown | observed | source_confirmed | n/a>
+    behavior: <prose: explicit retry path, automatic retry, or none>
+    evidence: <code_ref or test_id or "untested">
+  partial_success:
+    status:   <unknown | observed | source_confirmed | n/a>
+    behavior: <prose: what if 3 of 5 batch items save, 2 fail>
+    evidence: <code_ref or test_id or "untested">
+  refresh_mid_flight:
+    status:   <unknown | observed | source_confirmed | n/a>
+    behavior: <prose: client refreshes browser before response arrives>
+    evidence: <code_ref or test_id or "untested">
+  context_switch_mid_edit:
+    status:   <unknown | observed | source_confirmed | n/a>
+    behavior: <prose: user changes community/date while local queue has data>
+    evidence: <code_ref or test_id or "untested">
+  push_disconnect:
+    status:   <unknown | observed | source_confirmed | n/a>
+    behavior: <prose: SignalR connection drops mid-flight; does counter stay stale?>
+    evidence: <code_ref or test_id or "untested">
+  idempotency_strategy:
+    status:   <unknown | observed | source_confirmed | n/a>
+    behavior: <none | client_dedupe_token | server_idempotency_key | natural_idempotent>
+    evidence: <code_ref or test_id or "untested">
+  queue_retention:
+    status:   <unknown | observed | source_confirmed | n/a>
+    behavior: <prose: client queue cleared on success only? on submit attempt? per-row immediately?>
+    evidence: <code_ref or test_id or "untested">
 
 # ──────────────── Mode B helpers ────────────────
 url_conventions_observed: [<prose: "/{controller}/{action}/{id}/Pane → drawer partial", …>]
 unknowns_to_fill_when_source_arrives:
   - <field path: "validation[2].parameters">
-  - <field path: "endpoints[0].requires_anti_forgery">
+  - <field path: "endpoints[0].verification.payload_schema">
   - <…>
+
+# ──────────────── Schema extensions ────────────────
+# Use this block ONLY for kebab-case custom values that are NOT in the
+# sanctioned enum lists for event / action / relation / control_type.
+# Sanctioned values must NEVER appear here — they're already part of the
+# schema. Listing a sanctioned value here pollutes the schema-evolution
+# signal Codex review uses to decide future enum additions.
+#
+# Sanctioned event values: change | click | focus | blur | submit | load |
+#   row_click | row_expand | server_push | toolbar_commit | type | select |
+#   open_dropdown | dismiss | advance_step | scope_change | external_signal |
+#   queue_changed
+# Sanctioned action values: reload | hide | show | enable | disable | submit |
+#   navigate | replace_partial | open_modal | open_drawer | open_dropdown |
+#   dismiss | advance_step | switch_tab | queue | commit_batch |
+#   visual_state_change | emit_toast | filter_options | scope_change | export
+# Sanctioned relation values: parent | child | sibling | trigger | target |
+#   scope_provider | scope_consumer
+# Sanctioned control_type values: see the control_type field at top.
+#
+# Each entry below records: what kind of enum (event / action / relation /
+# control_type), the kebab-case proposed value, the reason it isn't covered,
+# evidence of where it's used, and status (always proposed — sanctioned
+# values do not appear here).
+extensions:
+  - kind: <event | action | relation | control_type>
+    value: <kebab-case slug>
+    reason: <prose: why this isn't covered by sanctioned values>
+    evidence: <prose: where in this artifact it's used; "observed at /Care/Tracking/…">
+    status: proposed
 ---
 
 # <Title>

@@ -176,18 +176,34 @@ If the running app is a production tenant, ask the user whether they prefer poin
 
 Two artifact-template blocks are **required** for the slices they apply to:
 
-- **`tenant_boundary`** under `authorization` — required for any slice `scoped_by` a context selector (community / facility / business unit) or whose endpoints carry a tenant id in the route. Captures: context sources, validation rule, mismatch behavior, denied response, revocation behavior, tamper-test evidence. Without it, the rewrite is at risk of IDOR / cross-tenant data leakage — a serious concern in regulated domains like Senior Living.
-- **`failure_matrix`** at the top level — required for any slice with mutating endpoints (POST / PUT / DELETE, batch toolbars, drag-drop persistence). Captures: 4xx / 5xx behavior, timeout, double-click idempotency, retry path, partial-success handling, refresh-mid-flight, context-switch-mid-edit, push-disconnect, idempotency strategy, queue retention. Without it, the rewrite can lose data or produce duplicates while UI reports success.
+- **`tenant_boundary`** under `authorization` — required for any slice `scoped_by` a context selector (community / facility / business unit) or whose endpoints carry a tenant id in the route. Captures: context sources + a structured **`tamper_matrix`** with one row per endpoint and required scenarios per endpoint: `route_tenant_mismatch`, `body_tenant_mismatch`, `foreign_key_ownership`, `revoked_grant`, `read_vs_write`. Each scenario carries `status` (unknown / observed / source_confirmed) and `observed_result`. A single prose `tamper_test_evidence` is **not sufficient** — the matrix forces explicit coverage of every cross-tenant attack surface.
+- **`failure_matrix`** at the top level — required for any slice with mutating endpoints (POST / PUT / DELETE, batch toolbars, drag-drop persistence). Each cell is structured as `{ status, behavior, evidence }`, not free prose. Required cells (cannot be silently omitted): `http_4xx`, `http_5xx`, `network_timeout`, `double_click_or_resubmit`, `retry_after_failure`, `partial_success`, `refresh_mid_flight`, `context_switch_mid_edit`, `push_disconnect`, `idempotency_strategy`, `queue_retention`.
 
-A slice without these required blocks where they apply is **not contract-complete**, even if its other claims verify.
+## Contract-completeness gate
+
+Every artifact carries `contract_status: complete | incomplete` at the frontmatter root. A slice is `complete` only when:
+
+- All required `failure_matrix` cells (mutating slices) have `status ∈ {source_confirmed, observed}` (NOT `unknown`).
+- All required `tenant_boundary.tamper_matrix` scenarios (scoped or tenant-routed slices) have `status ∈ {source_confirmed, observed}`.
+- All `endpoints[].verification` aspects relevant to the endpoint's role are at status ∈ `{source_confirmed, observed, observed_partial, n/a}` (NOT `unknown`).
+- All required validation messages, business_logic.selection.rules, and authorization.action_authorization entries are non-null.
+
+Otherwise: `incomplete`. `contract_status_reason` lists the gating gaps. The downstream rewrite session should treat `incomplete` artifacts as in-progress contracts — they can inform implementation but should not be sole source-of-truth for production work.
+
+A fresh LLM session producing artifacts at scale must **not** mark `contract_status: complete` unless all preconditions hold. This is the structural gate that prevents `unknown` cells from sneaking past as "verified."
 
 ## Endpoint verification is per-aspect
 
-URL + method observed in the network is *not* enough to call a mutating endpoint "verified." `endpoints[].verification` carries per-aspect flags: `method`, `route`, `payload_schema`, `response_shape`, `error_shape`, `anti_forgery`, `authorization`. Each is `unknown | observed | observed_partial | source_confirmed`. Mark only what the evidence supports. An endpoint with method+route observed but payload_schema unknown is **partially verified**, not "verified — `unverified: false`."
+URL + method observed in the network is *not* enough to call a mutating endpoint "verified." `endpoints[].verification` carries per-aspect flags: `method`, `route`, `payload_schema`, `response_shape`, `error_shape`, `anti_forgery`, `authorization`. Each is `unknown | observed | observed_partial | source_confirmed | n/a`. Mark only what the evidence supports. An endpoint with method+route observed but payload_schema unknown is **partially verified** — and unless the unknown is acceptable for that endpoint's role, it gates `contract_status` to `incomplete`.
 
 ## Extension mechanism
 
-The schema lists sanctioned values for `event` / `action` / `relation` enums. If a slice surfaces a behavior whose enum value isn't sanctioned, use a kebab-case custom value AND list it in `extensions:` at the bottom of the frontmatter. The skill-learning discipline applies: repeated custom values across artifacts are candidates for the next sanctioned-value list update via Codex review.
+The artifact-template publishes sanctioned values for `event` / `action` / `relation` / `control_type` enums (see comments in the template). If a slice surfaces a behavior whose enum value isn't sanctioned:
+
+- Use a kebab-case custom value where it appears (e.g. `event: queue_changed`).
+- AND register it in the structured `extensions:` block at the bottom of the frontmatter, with `kind`, `value`, `reason`, `evidence`, `status: proposed`.
+
+**Sanctioned values must NEVER appear in `extensions:`** — they're already part of the schema. Listing a sanctioned value pollutes the schema-evolution signal Codex review uses to decide future enum additions. The skill-learning discipline applies: repeated proposed values across artifacts are candidates for promotion to sanctioned via Codex review.
 
 ## Skill evolution discipline
 
