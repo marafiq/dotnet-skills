@@ -1,6 +1,25 @@
 ---
 name: mvc-ui-behaviors
-description: Use to extract user-visible BEHAVIORS and concrete server-side BUSINESS LOGIC from a legacy ASP.NET MVC 5.3 slice — conditionally-present UI, deferred batch submits, SignalR-driven updates, multi-step wizards, AJAX-loaded modals, cascading dropdowns, multi-tenant scoping, JS-driven runtime behavior — into a Markdown-per-slice artifact another LLM session uses to re-implement the slice in modern ASP.NET Core MVC 10. Two-step process: (1) read code with `csharp-lsp` (symbol navigation, find-references, find-implementations); (2) exercise the running app to discover, verify, improve, and enrich what code reading missed (especially JS-driven behavior). Browser is a first-class probe surface. Capture concrete business logic — *"loads residents in community X with status 'OnPremise', sorted by LastName ASC, paged 25, with computed fields CareLevel and CompliancePct"* — backed by code references. Never DOM ids, CSS classes, ARIA assumptions, jQuery selectors, widget-library names, or implementation syntax (LINQ/EF queries, class names, IoC bindings). Logs / OpenTelemetry / metrics out of scope. Trigger on *"document this view's behavior"*, *"capture how this drawer works"*, *"spec out this wizard"*, *"extract behaviors from this MVC 5 page"*, or any request to translate a legacy MVC interface into a behavioral contract for re-implementation. Applies to the dotnet-48 plugin (.NET Framework 4.8 / MVC 5.3).
+description: >
+  Use to extract user-visible BEHAVIORS and concrete server-side BUSINESS LOGIC
+  from a legacy ASP.NET MVC 5.3 slice — conditionally-present UI, deferred batch
+  submits, SignalR-driven updates, multi-step wizards, AJAX-loaded modals,
+  cascading dropdowns, multi-tenant scoping, JS-driven runtime behavior — into a
+  Markdown-per-slice artifact another LLM session uses to re-implement the slice
+  in modern ASP.NET Core MVC 10. Two-step process — (1) read code with
+  `csharp-lsp` for symbol navigation, find-references, find-implementations;
+  (2) exercise the running app to discover, verify, improve, and enrich what
+  code reading missed (especially JS-driven behavior). Browser is a first-class
+  probe surface. Capture concrete business logic such as "loads residents in
+  community X with status OnPremise, sorted by LastName ASC, paged 25, with
+  computed fields CareLevel and CompliancePct" — backed by code references.
+  Never DOM ids, CSS classes, ARIA assumptions, jQuery selectors, widget-library
+  names, or implementation syntax (LINQ/EF queries, class names, IoC bindings).
+  Logs / OpenTelemetry / metrics out of scope. Trigger on phrases like "document
+  this view's behavior", "capture how this drawer works", "spec out this wizard",
+  "extract behaviors from this MVC 5 page", or any request to translate a legacy
+  MVC interface into a behavioral contract for re-implementation. Applies to the
+  dotnet-48 plugin (.NET Framework 4.8 / MVC 5.3).
 ---
 
 # mvc-ui-behaviors
