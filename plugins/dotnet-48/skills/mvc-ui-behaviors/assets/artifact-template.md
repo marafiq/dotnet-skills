@@ -1,4 +1,11 @@
 ---
+# ──────────────── Schema version ────────────────
+# Increment when the artifact schema changes in a way that breaks downstream
+# consumers (linters, the rewrite session, cross-artifact tooling). Current
+# version: 5 (Round 5 — typed evidence, n/a coherence, structured business
+# logic, regulated_data_handling block).
+schema_version: 5
+
 # ──────────────── Identity ────────────────
 id: <kebab-case slug, e.g. care-tracking-record-toolbar>
 title: <human-readable name>
@@ -88,39 +95,71 @@ data_source:
   pre_filled_from_server: <true | false | null>
 
 # ──────────────── Server-side business logic ────────────────
-# The concrete rules that produce the slice's data. Backed by `code_refs`.
-# The rewrite session reproduces the rules in whatever data layer it picks.
+# The concrete rules that produce the slice's data. Each substantive
+# claim carries `status` + `evidence` (gate rule 6 applies). Free-prose
+# `selection.rules: ["Returns the residents for this screen"]` is rejected
+# by review — the contract requires concrete predicates the rewrite session
+# can reproduce.
 business_logic:
-  # Which records the slice's data load returns
+  # Which records the slice's data load returns. Decomposed into concrete
+  # parts the rewrite session can reproduce verbatim. Each predicate is one
+  # filter clause; ordering / projection / paging are separate concerns.
   selection:
-    rules:
-      - <e.g. "Returns residents where Status = 'OnPremise' AND IsArchived = false">
-      - <e.g. "Scoped to the currently-selected community (see scoped_by)">
-    code_refs: [<"Controllers/ResidentsController.cs:Index">, <"Services/ResidentQuery.cs:GetOnPremise">]
+    # Atomic filter clauses. A rule is a single comparison or set predicate.
+    # "Returns residents on premise and not archived" → two predicates, not one.
+    predicates:
+      - rule: <e.g. "Status = 'OnPremise'">
+        status: <unknown | observed | source_confirmed>
+        evidence: <typed source_ref or test_id; required when status ≠ unknown>
+        rationale: <prose, optional: business reason for the filter>
+      - rule: <e.g. "IsArchived = false">
+        status: <unknown | observed | source_confirmed>
+        evidence: <…>
+        rationale: <…>
+    # Server-side projection: which fields of the entity make it into the
+    # response. Lower-bound for the rewrite — anything not listed here is
+    # not contractual.
+    projection:
+      fields: [<e.g. "ResidentId", "FirstName", "LastName", "RoomNumber", "CareLevel">]
+      status: <unknown | observed | source_confirmed>
+      evidence: <typed source_ref or test_id>
+    # Sort order applied server-side before paging.
+    ordering:
+      sort_keys:
+        - { field: <e.g. "LastName">, direction: <asc | desc> }
+        - { field: <e.g. "FirstName">, direction: <asc | desc> }
+      user_changeable: <true | false>
+      status: <unknown | observed | source_confirmed>
+      evidence: <typed source_ref or test_id>
+    # Server-side paging.
+    paging:
+      default_size: <int | null>
+      server_side: <true | false>
+      status: <unknown | observed | source_confirmed>
+      evidence: <typed source_ref or test_id>
+    # Free-form rationale & cross-references — narrative for human readers.
+    # NOT a substitute for predicates/projection/ordering/paging.
+    rules_summary: <prose: 1–2 sentences for human reviewers; the
+                    structured fields above are the contract>
+    code_refs: [<typed source_ref entries>]
 
   # Permission-based filtering applied at query time
   # (orthogonal to action_authorization, which gates user actions)
   authorization_filters:
     - rule: <e.g. "Only residents in communities the current user has been granted access to">
-      code_ref: <"Filters/CommunityAccessFilter.cs">
+      code_ref: <typed source_ref>
+      status: <unknown | observed | source_confirmed>
 
   # Fields the API surfaces or the view derives that aren't direct properties
   computed_fields:
     - name: <e.g. "CareLevel">
       derivation: <e.g. "Resolved from the resident's primary CarePlan; falls back to 'Unassigned' when no plan">
-      code_ref: <"Models/ResidentListItem.cs:CareLevel">
+      code_ref: <typed source_ref>
+      status: <unknown | observed | source_confirmed>
     - name: <e.g. "CompliancePct">
       derivation: <e.g. "completed / total care tasks in the trailing 30 days">
-      code_ref: <"Services/ComplianceCalculator.cs:For">
-
-  ordering:
-    default: <e.g. "LastName ASC, FirstName ASC">
-    user_changeable: <true | false>
-    code_ref: <controller action where ordering applies>
-
-  paging:
-    default_size: <int>
-    server_side: <true | false>
+      code_ref: <typed source_ref>
+      status: <unknown | observed | source_confirmed>
 
   soft_delete: <e.g. "Records with IsArchived=true are excluded by default; included on 'Show Archived'" | null>
 
@@ -131,7 +170,62 @@ business_logic:
   user_visible_side_effects:
     - kind: <audit_entry | email | notification | search_index | downstream_record>
       description: <prose: what the user observes elsewhere as a result>
-      code_ref: <where the side effect originates>
+      code_ref: <typed source_ref>
+      status: <unknown | observed | source_confirmed>
+
+# ──────────────── Regulated data handling (REQUIRED for PHI / PII slices) ────────────────
+# Senior-Living is regulated (HIPAA in the US, plus state-level retention
+# rules). When a slice surfaces PHI / PII (resident demographics, medical
+# data, room assignments, medication, care notes), this block is REQUIRED.
+# Slices that surface no regulated data set `surfaces_regulated_data: false`
+# and the rest of the block can be `n/a` with `n/a_reason`.
+#
+# Gate rule 11 (PHI coverage): when surfaces_regulated_data: true, every
+# field below must be at status observed | source_confirmed | n/a — and
+# n/a requires n/a_reason. The downstream rewrite session relies on this
+# block to preserve compliance posture across the migration.
+regulated_data_handling:
+  surfaces_regulated_data: <true | false>
+  data_categories: [<e.g. "resident_demographics", "medical_record", "medication", "care_note", "room_assignment", "guardian_contact">]
+
+  # Who-saw-what audit. For PHI reads this is often as important as
+  # who-changed-what. The legacy app may not have this; if it doesn't,
+  # flag rewrite_intent: improve.
+  read_audit:
+    emits_view_audit: <true | false | unknown>
+    audit_target: <prose: where the read-audit row lands (table, file, log)>
+    user_visible_to: <prose: whom the audit is exposed to — admin only? compliance officer? resident on request?>
+    status: <unknown | observed | source_confirmed | n/a>
+    evidence: <typed source_ref or test_id | "untested">
+    n/a_reason: <prose | null>
+    rewrite_intent: <preserve | improve | drop | unspecified>
+
+  # Export & print are exfiltration vectors and need the same audit.
+  export_audit:
+    emits_export_audit: <true | false | unknown>
+    formats_audited: [<pdf | csv | xlsx | print_view>]
+    status: <unknown | observed | source_confirmed | n/a>
+    evidence: <typed source_ref or test_id | "untested">
+    n/a_reason: <prose | null>
+
+  # Retention & deletion. Soft-delete is the legacy norm in this domain;
+  # hard-delete (right-to-erasure) is rare. Both are legitimate.
+  retention:
+    policy: <prose: e.g. "records retained 7 years per state regulation; archived after resident departure">
+    soft_delete: <true | false | unknown>
+    hard_delete: <true | false | unknown>
+    status: <unknown | observed | source_confirmed | n/a>
+    evidence: <typed source_ref or test_id | "untested">
+    n/a_reason: <prose | null>
+
+  # Minimum-necessary: does the slice show only what the user's role needs?
+  # Or does it default-show everything and rely on the user not to look?
+  minimum_necessary:
+    role_filtered_fields: <true | false | unknown>
+    description: <prose: e.g. "Care Aide sees demographics + care plan; Nurse sees those plus medication; Admin sees all + audit">
+    status: <unknown | observed | source_confirmed | n/a>
+    evidence: <typed source_ref or test_id | "untested">
+    n/a_reason: <prose | null>
 
 # ──────────────── Configuration ────────────────
 # Keys depend on control_type. Populate what fits, drop the rest.
@@ -392,14 +486,42 @@ endpoints:
       error_shape:      <unknown | observed | observed_partial | source_confirmed | n/a>
       anti_forgery:     <unknown | observed | observed_partial | source_confirmed | n/a>
       authorization:    <unknown | observed | observed_partial | source_confirmed | n/a>
+    # Evidence for each aspect. Required when aspect status is observed |
+    # source_confirmed (gate rule 6) OR n/a on a gate-critical aspect (gate
+    # rule 10). Aspects at unknown can omit the entry.
+    #
+    # Each entry carries:
+    #   source_refs    — list of typed refs (see SKILL.md "Evidence shapes"):
+    #                    {path, symbol}, {path, line}, or {test_id} for browser probes.
+    #                    REQUIRED when status is source_confirmed.
+    #   observed_result — prose describing what the browser exercise saw.
+    #                    REQUIRED (not "untested"/"unknown") when status is observed.
+    #   n/a_reason     — prose justifying why the aspect doesn't apply.
+    #                    REQUIRED when status is n/a on any of:
+    #                      authorization, error_shape, anti_forgery
+    #                    on a MUTATING (mutates_state: true) or TENANT-SCOPED
+    #                    endpoint. Default-BLOCKING without n/a_reason.
+    verification_evidence:
+      method:           { source_refs: [], observed_result: <prose | null>, n/a_reason: null }
+      route:            { source_refs: [], observed_result: <prose | null>, n/a_reason: null }
+      payload_schema:   { source_refs: [], observed_result: <prose | null>, n/a_reason: null }
+      response_shape:   { source_refs: [], observed_result: <prose | null>, n/a_reason: null }
+      error_shape:      { source_refs: [], observed_result: <prose | null>, n/a_reason: null }
+      anti_forgery:     { source_refs: [], observed_result: <prose | null>, n/a_reason: null }
+      authorization:    { source_refs: [], observed_result: <prose | null>, n/a_reason: null }
     # Gate rules for contract_status: complete:
     # - method, route at unknown    → BLOCKING
     # - For MUTATING endpoints (mutates_state: true) AND/OR TENANT-SCOPED endpoints:
     #   payload_schema, error_shape, anti_forgery, authorization must be
     #   observed | source_confirmed | n/a. observed_partial is BLOCKING
     #   unless listed under contract_status_exceptions with reason + risk_owner.
-    # - Evidence coherence: status observed | source_confirmed REQUIRES non-empty
-    #   evidence (observed_result / source_refs not "untested" / "unknown").
+    # - Evidence coherence (rule 6): status observed | source_confirmed REQUIRES
+    #   non-empty evidence (observed_result not "untested"/"unknown" AND/OR
+    #   source_refs non-empty for source_confirmed).
+    # - n/a coherence (rule 10): status n/a on gate-critical aspects REQUIRES
+    #   n/a_reason. authorization: n/a and error_shape: n/a on a mutating or
+    #   tenant-scoped endpoint require an EXPLICIT contract_status_exceptions
+    #   entry — the default is to BLOCK these.
     # - For pure-read GET endpoints (mutates_state: false): observed_partial
     #   acceptable for response_shape when the endpoint returns server-rendered
     #   HTML (the rewrite redefines the response surface anyway).

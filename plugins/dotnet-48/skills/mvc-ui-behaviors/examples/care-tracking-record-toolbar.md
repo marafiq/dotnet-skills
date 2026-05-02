@@ -1,4 +1,6 @@
 ---
+schema_version: 5
+
 # ──────────────── Identity ────────────────
 id: care-tracking-record-toolbar
 title: "Care Tracking — Record Care commit toolbar"
@@ -77,6 +79,45 @@ business_logic:
     - kind: signalr_push
       description: "POST returns 200 → server emits SignalR push on `stafftaskshub` → summary card counter and any in-page progress indicators advance within ~1–3 s."
       code_ref: "unknown — fill when source arrives"
+
+# ──────────────── Regulated data handling ────────────────
+# This slice WRITES care records — medical-care entries that are PHI under
+# HIPAA and Senior-Living state regulations. The contract here is critical:
+# the rewrite must preserve audit, retention, and minimum-necessary
+# semantics. Most fields are unknown until source arrives.
+regulated_data_handling:
+  surfaces_regulated_data: true
+  data_categories:
+    - "care_note"          # the per-task record carries a care note tied to the resident
+    - "medication"         # depending on task type, may include medication administration
+    - "resident_demographics"   # task records reference resident_id implicitly
+  read_audit:
+    emits_view_audit: unknown
+    audit_target: "unknown — fill when source arrives. Editor presumably writes a view audit when the user opens the per-task editor; the toolbar itself is a write surface."
+    user_visible_to: "unknown — likely admin/compliance role only"
+    status: unknown
+    evidence: "untested — must inspect Activity / Audit panel and confirm whether per-record-write entries surface to non-admin users"
+    n/a_reason: null
+    rewrite_intent: preserve
+  export_audit:
+    emits_export_audit: unknown
+    formats_audited: []
+    status: unknown
+    evidence: "untested — Print button target unknown; whether printing creates an export-audit row is unverified"
+    n/a_reason: null
+  retention:
+    policy: "unknown — Senior-Living state-by-state retention rules typically require 5–10 years for medical-care records; legacy app's specific policy unverified"
+    soft_delete: unknown
+    hard_delete: unknown
+    status: unknown
+    evidence: "untested — must confirm with operator + inspect IsArchived / IsDeleted flags on the task-record table"
+    n/a_reason: null
+  minimum_necessary:
+    role_filtered_fields: unknown
+    description: "Whether different roles (Care Aide / Nurse / Admin) see different field sets in the underlying task records is unverified. The toolbar itself shows only the queue count; the editor is where field exposure differs."
+    status: unknown
+    evidence: "untested — must exercise at least three role variants"
+    n/a_reason: null
 
 # ──────────────── Configuration ────────────────
 configuration:

@@ -203,9 +203,29 @@ Every artifact carries `contract_status: complete | incomplete` at the frontmatt
 
 9. **SignalR / SSE structural coverage.** Every `signal_sources` entry of kind `signalr | sse` must reference a matching `endpoints[].id` via `endpoint_id`, AND that endpoint must have a tamper_matrix row (when the slice is tenant-scoped) AND a non-`unknown` `failure_matrix.push_disconnect` cell. Free-prose `signal_sources` declarations without an endpoint anchor are BLOCKING for tenant-scoped slices — push frames cross tenant boundaries and must be tamper-tested at the hub-method granularity.
 
-Otherwise: `incomplete`. `contract_status_reason` lists the gating gaps; `contract_status_exceptions` records any structurally-allowed `observed_partial` cases with reason + risk_owner; `cross_slice_refs_pending` records unresolved sibling artifact ids with reason.
+10. **`n/a` coherence — no laundering.** `n/a` is a legitimate status only when the aspect provably does not apply. Every `n/a` on a gate-critical field requires an `n/a_reason` that names *why* it doesn't apply. Specifically:
+    - `verification.authorization: n/a`, `verification.error_shape: n/a`, and `verification.anti_forgery: n/a` on **mutating** (`mutates_state: true`) or **tenant-scoped** endpoints REQUIRE an explicit `contract_status_exceptions` entry with `reason` + `risk_owner` — the default is BLOCKING. (Anti-forgery `n/a` is the canonical legacy escape hatch for GET-shaped writes; it must be proven-non-applicable, not waived.)
+    - `failure_matrix` cells at `status: n/a` REQUIRE the `behavior` field to state the structural reason (e.g. `"n/a — single-record state change, no batch"`), not just `"n/a"`.
+    - `tamper_matrix` scenarios at `status: n/a` REQUIRE `observed_result` to state why the scenario doesn't apply to that endpoint's role (e.g. `"n/a — SignalR has no per-frame URL"` for `route_tenant_mismatch` on a hub).
+    - All-`n/a` artifacts are flagged for human review regardless of structural completeness — at scale, blanket-`n/a` is the most likely status-laundering shape and the gate emits a warning even when individual cells are well-justified.
+
+11. **PHI / regulated-data handling.** When the slice surfaces resident demographics, medical data, medication entries, care notes, room assignments, or any other regulated identifier (`regulated_data_handling.surfaces_regulated_data: true`), every field under `regulated_data_handling` (read audit, export audit, retention, minimum-necessary) must be at `observed | source_confirmed | n/a`. `n/a` requires `n/a_reason`. `unknown` is BLOCKING. Senior-Living modernization that drops who-saw-what audits or retention semantics is a regulatory regression — the gate prevents that by structurally requiring the contract.
+
+12. **Schema version pinned.** Every artifact frontmatter declares `schema_version: <int>`. Artifacts without `schema_version`, or with a version older than the current template, are flagged for re-review and cannot be `complete` until brought up. This makes the corpus machine-checkable as the schema evolves: a future linter can refuse stale-schema artifacts at PR time.
+
+Otherwise: `incomplete`. `contract_status_reason` lists the gating gaps; `contract_status_exceptions` records any structurally-allowed `observed_partial` or gate-critical-`n/a` cases with reason + risk_owner; `cross_slice_refs_pending` records unresolved sibling artifact ids with reason.
 
 The downstream rewrite session treats `incomplete` artifacts as in-progress contracts — informative for implementation but not sole source-of-truth for production work.
+
+## Evidence shapes
+
+`source_refs` and tamper/failure `evidence` fields are typed, not free-form prose. Three accepted shapes — the gate (rule 6) treats other shapes as missing evidence:
+
+- **Code reference** — `{path: "Controllers/CareController.cs", symbol: "PostRecord"}` or `{path: "Controllers/CareController.cs", line: 142}`. Use `symbol` over `line` when the symbol is unambiguous; symbols survive line-number drift.
+- **Probe id** — `{test_id: "probe_double_click"}`. Refers to an entry in the artifact's `## Verification log` that documents the browser exercise (date, what was clicked, what was observed). Probe ids are kebab-case slugs prefixed `probe_`.
+- **Cross-artifact reference** — `{artifact: "care-tracking-shift-summary-card", section: "tenant_boundary.tamper_matrix.shift_list_get.route_tenant_mismatch"}`. For evidence that lives in a sibling artifact (typical for shared SignalR hubs).
+
+`source_refs: ["confirmed in controller"]` is a free-prose string and the gate rejects it. `source_refs: ["unknown"]` likewise.
 
 ## Endpoint identity for cross-references
 
@@ -243,6 +263,8 @@ A pattern enters the skill (taxonomy or artifact schema) only when:
 
 A one-off observation goes into the slice's artifact (in `## Edge cases`, the verification log, or as a behavioral claim of that slice). It does not immediately reshape the skill.
 
+The bookkeeping for this discipline lives in [`references/pattern-candidates.md`](references/pattern-candidates.md) — a registry of proposed additions with evidence count, status, and the schema_version history. Every promotion of a candidate to the canonical schema increments `schema_version` in `assets/artifact-template.md` (gate rule 12).
+
 ## Legacy stacks pull off more than people remember
 
 ASP.NET MVC 5 + jQuery + partial views can express remarkably complex behavior: long-running export jobs with progress, real-time-collaborative grids, drag-drop kanban boards, multi-actor approval workflows, audit timelines, voice input on notes, optimistic-locking conflict resolution. **Don't underestimate the legacy app.** When you encounter something the core taxonomy doesn't cleanly cover, look at the *Advanced behaviors* section of [`references/behavior-taxonomy.md`](references/behavior-taxonomy.md) — and if it's still not there, **extend the schema with new fields and ask the user**. The taxonomy is a framework, not a checklist.
@@ -271,4 +293,5 @@ A composite slice (e.g. a real-time-collaborative editable grid) decomposes into
 - [`references/browser-verification.md`](references/browser-verification.md) — semantic locators, settle windows, network capture timing, both-halves observation, per-behavior probe sequences.
 - [`references/code-pending-mode.md`](references/code-pending-mode.md) — narrow contingency when source is temporarily unavailable.
 - [`references/cross-slice-context.md`](references/cross-slice-context.md) — global context selectors, propagation modes, scoping declarations.
-- [`assets/artifact-template.md`](assets/artifact-template.md) — rich frontmatter schema accommodating all observed behavior types.
+- [`references/pattern-candidates.md`](references/pattern-candidates.md) — registry of proposed schema additions; `schema_version` history.
+- [`assets/artifact-template.md`](assets/artifact-template.md) — rich frontmatter schema accommodating all observed behavior types. Currently `schema_version: 5`.
