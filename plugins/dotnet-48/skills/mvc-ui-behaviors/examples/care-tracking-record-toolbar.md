@@ -10,11 +10,18 @@ contract_status: incomplete
 contract_status_reason: >
   Mutating slice with required failure_matrix cells at status: unknown
   (http_4xx, http_5xx, network_timeout, double_click_or_resubmit,
-  retry_after_failure, partial_success, idempotency_strategy,
-  queue_retention on failure). Tenant tamper_matrix scenarios untested
-  (route, body, foreign-key ownership). Endpoint verification has
-  payload_schema, error_shape, anti_forgery, authorization at unknown.
-  Source-fill or testing required before this slice is contract-complete.
+  retry_after_failure, partial_success, push_disconnect,
+  idempotency_strategy, queue_retention on failure). Tenant
+  tamper_matrix scenarios untested across all three endpoints (route,
+  body, foreign-key ownership, revoked_grant, read_vs_write).
+  Endpoint verification has payload_schema, error_shape, anti_forgery,
+  authorization at unknown for the mutating POST. Source-fill or
+  testing required before this slice is contract-complete.
+
+# Optional exception block — empty here because we are not claiming
+# observed_partial as acceptable for any aspect; everything that's
+# partial is rolled forward as the work that gates `complete`.
+contract_status_exceptions: []
 
 routes:
   - "/Care/Tracking/{communityId}/Record/{date}/List/{shiftId}"
@@ -153,7 +160,8 @@ on_close: null
 
 # ──────────────── Endpoints ────────────────
 endpoints:
-  - method: POST
+  - id: record_care_post
+    method: POST
     url: "/Care/Tracking/{communityId}/Record/{date}"
     purpose: "Commit queued task records for the shift on the given date."
     response_kind: json
@@ -166,7 +174,8 @@ endpoints:
       anti_forgery:     unknown        # presence of __RequestVerificationToken not confirmed
       authorization:    unknown        # permission rule for the action not source-confirmed
 
-  - method: GET
+  - id: record_prn_navigation
+    method: GET
     url: "/Care/Tracking/{communityId}/RecordPrn/{date}/{shiftId}"
     purpose: "Navigate to the PRN-care recording editor (separate flow)."
     response_kind: html_full
@@ -179,7 +188,8 @@ endpoints:
       anti_forgery:     n/a
       authorization:    unknown
 
-  - method: "unknown"
+  - id: print_button
+    method: "unknown"
     url: "unknown — Print button target"
     purpose: "Print or export the current shift's task list."
     response_kind: "unknown"
@@ -211,7 +221,7 @@ authorization:
       - "url_path: /Care/Tracking/{communityId}/Record/{date}/List/{shiftId}"
       - "session: CurrentCommunityId (assumed; legacy MVC default — verify when source arrives)"
     tamper_matrix:
-      - endpoint: "POST /Care/Tracking/{communityId}/Record/{date}"
+      - endpoint_id: record_care_post
         scenarios:
           - kind: route_tenant_mismatch
             baseline_context: "Authenticated user with grant for community A; queue contains 1 task record."
@@ -255,6 +265,92 @@ authorization:
             expected_status: "deny"
             expected_shape: html_full
             observed_result: "untested — likely the legacy generic-error toast pattern"
+            source_refs: ["unknown"]
+            status: unknown
+
+      - endpoint_id: record_prn_navigation
+        scenarios:
+          - kind: route_tenant_mismatch
+            baseline_context: "User authenticated for community A; URL has communityId=A."
+            tampered_input: "Manually navigate to /Care/Tracking/{B}/RecordPrn/... where the user lacks B."
+            expected_status: "deny"
+            expected_shape: html_full
+            observed_result: "untested"
+            source_refs: ["unknown"]
+            status: unknown
+          - kind: body_tenant_mismatch
+            baseline_context: "GET navigation."
+            tampered_input: "n/a — GET has no body."
+            expected_status: "n/a"
+            expected_shape: n/a
+            observed_result: "n/a — read-only navigation"
+            source_refs: []
+            status: n/a
+          - kind: foreign_key_ownership
+            baseline_context: "GET navigation."
+            tampered_input: "n/a — GET takes no foreign-key references in body."
+            expected_status: "n/a"
+            expected_shape: n/a
+            observed_result: "n/a — foreign-key check applies on the editor's POST flow"
+            source_refs: []
+            status: n/a
+          - kind: revoked_grant
+            baseline_context: "User had grant for community A; admin revokes."
+            tampered_input: "User clicks Record PRN Care."
+            expected_status: "deny"
+            expected_shape: html_full
+            observed_result: "untested"
+            source_refs: ["unknown"]
+            status: unknown
+          - kind: read_vs_write
+            baseline_context: "User has read grant but not write. Read endpoint."
+            tampered_input: "User reaches the navigation; the linked editor's writes would gate separately."
+            expected_status: "allow at this read endpoint"
+            expected_shape: html_full
+            observed_result: "untested — must verify read access doesn't leak data"
+            source_refs: ["unknown"]
+            status: unknown
+
+      - endpoint_id: print_button
+        scenarios:
+          - kind: route_tenant_mismatch
+            baseline_context: "Print scoped to current community + shift + date."
+            tampered_input: "Print URL/method unknown — cannot exercise yet. Once known, exercise URL-tampered tenant id."
+            expected_status: "deny"
+            expected_shape: "unknown"
+            observed_result: "untested"
+            source_refs: ["unknown"]
+            status: unknown
+          - kind: body_tenant_mismatch
+            baseline_context: "Print URL/method unknown."
+            tampered_input: "n/a — print mechanism unknown"
+            expected_status: "unknown"
+            expected_shape: "unknown"
+            observed_result: "untested"
+            source_refs: ["unknown"]
+            status: unknown
+          - kind: foreign_key_ownership
+            baseline_context: "Print URL/method unknown."
+            tampered_input: "n/a"
+            expected_status: "unknown"
+            expected_shape: "unknown"
+            observed_result: "untested"
+            source_refs: ["unknown"]
+            status: unknown
+          - kind: revoked_grant
+            baseline_context: "Print URL/method unknown."
+            tampered_input: "n/a"
+            expected_status: "unknown"
+            expected_shape: "unknown"
+            observed_result: "untested"
+            source_refs: ["unknown"]
+            status: unknown
+          - kind: read_vs_write
+            baseline_context: "Print is read-side; export must respect the same authorization as the underlying read."
+            tampered_input: "n/a — print mechanism unknown"
+            expected_status: "unknown"
+            expected_shape: "unknown"
+            observed_result: "untested"
             source_refs: ["unknown"]
             status: unknown
 
@@ -304,9 +400,9 @@ failure_matrix:
     behavior: "Possibilities: natural_idempotent (server dedupes by resident_id+task_id+date), client_dedupe_token (no client evidence observed), or none. Critical to confirm before rewrite."
     evidence: "untested — must exercise via deliberate double-submit"
   queue_retention:
-    status:   observed_partial
-    behavior: "On success: queue cleared (observed). On failure: behavior unknown. On context switch: queue cleared without prompt (observed)."
-    evidence: "Success path observed during exploration. Failure path untested."
+    status:   unknown
+    behavior: "On success: queue cleared (observed during exploration). On failure: behavior unknown — failure path is the gating concern. On context switch: queue cleared without prompt (observed)."
+    evidence: "Success path observed; failure path untested. Required cell for mutating slices — must be exercised by forcing a 5xx and observing whether the queue clears or persists for retry."
 
 # ──────────────── Mode B helpers ────────────────
 url_conventions_observed:

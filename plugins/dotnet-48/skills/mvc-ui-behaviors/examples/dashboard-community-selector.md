@@ -13,6 +13,7 @@ contract_status_reason: >
   zero grants; behavior when grant is revoked mid-session). Selection
   endpoint URL/method/payload schema all unknown — fill when source
   arrives. failure_matrix cells largely unverified.
+contract_status_exceptions: []
 
 # Appears on every authenticated page in the app — global header element.
 routes:
@@ -137,7 +138,8 @@ on_close:
 
 # ──────────────── Endpoints ────────────────
 endpoints:
-  - method: "unknown"
+  - id: community_switch_post
+    method: "unknown"
     url: "unknown — fill when source arrives"
     purpose: "Set the current community in the user's session/state and trigger page reload."
     response_kind: "unknown"
@@ -170,13 +172,31 @@ authorization:
       - "session: CurrentCommunityId (assumed; legacy MVC default — verify when source arrives)"
       - "url_path: many app routes carry community id (e.g. /Care/Tracking/{communityId}) — server presumably validates these match the session value"
     tamper_matrix:
-      - endpoint: "<unknown — community-switch endpoint>"
+      - endpoint_id: community_switch_post
         scenarios:
           - kind: body_tenant_mismatch
             baseline_context: "Authenticated user with grants for communities A and B."
             tampered_input: "Submit selection POST with communityId field set to community C (no grant)."
             expected_status: "deny"
             expected_shape: "unknown — fill when source arrives"
+            observed_result: "untested"
+            source_refs: ["unknown"]
+            status: unknown
+
+          - kind: route_tenant_mismatch
+            baseline_context: "Selector currently set to community A in session."
+            tampered_input: "User manually navigates to /Care/Tracking/{B} where B is granted but session reads A."
+            expected_status: "allow with implicit context update OR deny — behavior unknown"
+            expected_shape: "unknown"
+            observed_result: "untested"
+            source_refs: ["unknown"]
+            status: unknown
+
+          - kind: foreign_key_ownership
+            baseline_context: "Selector POST accepts a community id."
+            tampered_input: "Send a community id that exists in the DB but is owned by another tenant entirely (no relationship to the calling user's grants)."
+            expected_status: "deny"
+            expected_shape: "unknown"
             observed_result: "untested"
             source_refs: ["unknown"]
             status: unknown
@@ -190,10 +210,10 @@ authorization:
             source_refs: ["unknown"]
             status: unknown
 
-          - kind: route_tenant_mismatch
-            baseline_context: "Selector currently set to community A in session."
-            tampered_input: "User manually navigates to /Care/Tracking/{B} where B is granted but session reads A."
-            expected_status: "allow with implicit context update OR deny — behavior unknown"
+          - kind: read_vs_write
+            baseline_context: "User can read the selector (option list filtered to grants)."
+            tampered_input: "Confirm that the option-list filter is enforced server-side on the selection POST as well, not only on the read render — i.e. submitting an id absent from the rendered list still denies."
+            expected_status: "deny on write even if the read-side hides the option"
             expected_shape: "unknown"
             observed_result: "untested"
             source_refs: ["unknown"]
@@ -220,9 +240,9 @@ failure_matrix:
     behavior: "User clicks two options quickly — last-write-wins assumed; selection POST may race with reload."
     evidence: "untested"
   retry_after_failure:
-    status:   observed_partial
-    behavior: "User can re-open the dropdown and try again; no explicit retry affordance."
-    evidence: "Observed: dropdown can be re-opened after dismissing."
+    status:   observed
+    behavior: "User can re-open the dropdown and try again; no explicit retry affordance, but the dropdown is re-openable after dismissal."
+    evidence: "Observed during exploration: dropdown re-opens after dismiss; selecting again issues a fresh POST."
   partial_success:
     status:   n/a
     behavior: "n/a — single-record state change."
@@ -240,9 +260,9 @@ failure_matrix:
     behavior: "n/a — no SignalR involvement on this slice."
     evidence: "n/a"
   idempotency_strategy:
-    status:   inferred
-    behavior: "natural_idempotent — selecting the same community twice is a no-op (the server-side state is already that community)."
-    evidence: "Inferred from the always-shows-current-selection behavior; unverified."
+    status:   unknown
+    behavior: "Likely natural_idempotent — selecting the same community twice should be a no-op (server-side state is already that community), but the endpoint's actual write semantics (does it always run a SET, or does it short-circuit?) are not verified."
+    evidence: "untested — fill when source arrives; verify by inspecting controller action and any session-write side effects."
   queue_retention:
     status:   n/a
     behavior: "n/a — no client-side queue on this slice. Downstream queues are discarded on switch (see context_switch_mid_edit)."

@@ -22,6 +22,18 @@ control_type: <dropdown | textbox | textarea | checkbox | radio | grid | form | 
 # contract_status: complete unless those preconditions hold.
 contract_status: <complete | incomplete>
 contract_status_reason: <prose: which required cells/scenarios are unknown or untested; what evidence is missing>
+contract_status_exceptions:
+  # Optional. Used only when an aspect is structurally `observed_partial`
+  # but the slice is still claimed `complete`. Each exception MUST carry
+  # an explicit reason and a risk owner (named human or role). Default
+  # behavior of the gate is to BLOCK `complete` on `observed_partial`
+  # for security-sensitive aspects (payload_schema, error_shape,
+  # anti_forgery, authorization on mutating or tenant-scoped endpoints).
+  - aspect: <e.g. "endpoints[record_care_post].verification.payload_schema">
+    state: observed_partial
+    reason: <prose: why partial is acceptable for this slice/endpoint>
+    risk_owner: <name or role>
+    follow_up: <prose: what work would close the gap>
 
 # URLs where the user encounters this slice (same in legacy and rewrite — routes are preserved).
 # Use route-pattern syntax with named parameters; multiple entries when the slice appears in more than one place.
@@ -320,7 +332,8 @@ on_close:
 #   source_confirmed — confirmed in source code
 #   n/a              — not applicable for this endpoint kind (e.g. anti_forgery for GET)
 endpoints:
-  - method: <GET | POST | PUT | DELETE>
+  - id: <stable kebab-case identifier; referenced from tenant_boundary.tamper_matrix and contract_status_exceptions>
+    method: <GET | POST | PUT | DELETE>
     url: <route path>
     purpose: <prose>
     response_kind: <html_full | html_partial | json | json_problem_details | redirect>
@@ -332,9 +345,16 @@ endpoints:
       error_shape:      <unknown | observed | observed_partial | source_confirmed | n/a>
       anti_forgery:     <unknown | observed | observed_partial | source_confirmed | n/a>
       authorization:    <unknown | observed | observed_partial | source_confirmed | n/a>
-    # For mutating endpoints (POST/PUT/DELETE), the failure_matrix below
-    # MUST be populated; required cells with status: unknown gate the slice
-    # to contract_status: incomplete.
+    # Gate rules for contract_status: complete:
+    # - method, route at unknown    → BLOCKING
+    # - For MUTATING endpoints (POST/PUT/DELETE) AND/OR TENANT-SCOPED endpoints:
+    #   payload_schema, error_shape, anti_forgery, authorization must be
+    #   observed | source_confirmed | n/a. observed_partial is BLOCKING
+    #   unless listed under contract_status_exceptions with reason + risk_owner.
+    # - For other GET endpoints: observed_partial acceptable for response_shape
+    #   when the endpoint returns a server-rendered HTML view (the rewrite
+    #   redefines the response surface anyway).
+    # - Required cells in failure_matrix at status: unknown are BLOCKING.
 
 # ──────────────── Authorization ────────────────
 authorization:
@@ -364,8 +384,13 @@ authorization:
   #   - read_vs_write           — read vs write denial behavior may differ
   tenant_boundary:
     context_sources: [<"url_path: /Care/Tracking/{communityId}", "session: CurrentCommunityId", "cookie: alis_community", "claim: tenant_id">]
+    # tamper_matrix MUST have one entry per tenant-scoped endpoint listed
+    # in `endpoints[]` (referenced by stable endpoint_id). Each entry
+    # includes scenarios for every required kind that applies to that
+    # endpoint's role; scenarios that don't apply are explicitly marked
+    # `status: n/a` with a justification in `observed_result`.
     tamper_matrix:
-      - endpoint: <endpoint url or id>
+      - endpoint_id: <reference to endpoints[].id>
         scenarios:
           - kind: <route_tenant_mismatch | body_tenant_mismatch | foreign_key_ownership | revoked_grant | read_vs_write>
             baseline_context: <prose: authorized starting state>
@@ -374,7 +399,7 @@ authorization:
             expected_shape: <html_full | json_problem_details | redirect | n/a>
             observed_result: <prose | "untested">
             source_refs: [<code_ref or "unknown">]
-            status: <unknown | observed | source_confirmed>
+            status: <unknown | observed | source_confirmed | n/a>
 
 # ──────────────── Failure matrix (REQUIRED for any slice with mutating endpoints) ────────────────
 # Each cell is structured: status + behavior + evidence. Cells at status:
@@ -388,6 +413,9 @@ authorization:
 #
 # Cells legitimately n/a are marked status: n/a (e.g. push_disconnect on a
 # slice with no SignalR involvement; partial_success on a non-batch endpoint).
+# Canonical failure_matrix status enum: unknown | observed | source_confirmed | n/a
+# (NOT observed_partial — partial knowledge of failure semantics is treated as
+# unknown for gating purposes. NOT inferred — inferences are not evidence.)
 failure_matrix:
   http_4xx:
     status:   <unknown | observed | source_confirmed | n/a>

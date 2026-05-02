@@ -14,6 +14,7 @@ contract_status_reason: >
   and authorization at unknown for the GET. Push-disconnect
   failure-matrix cell unobserved. Source-fill or testing
   required before contract-complete.
+contract_status_exceptions: []
 
 routes:
   - "/Care/Tracking/{communityId}"
@@ -150,7 +151,8 @@ on_close: null
 
 # ──────────────── Endpoints ────────────────
 endpoints:
-  - method: GET
+  - id: shift_list_get
+    method: GET
     url: "/Care/Tracking/{communityId}"
     purpose: "Return the shift summary cards for the community on the selected date."
     response_kind: html_full
@@ -163,7 +165,8 @@ endpoints:
       anti_forgery:     n/a       # GET, no anti-forgery
       authorization:    observed_partial
 
-  - method: GET
+  - id: editor_navigation
+    method: GET
     url: "/Care/Tracking/{communityId}/Record/{date}/List/{shiftId}"
     purpose: "Navigate into the per-task editor for a specific shift on a specific date."
     response_kind: html_full
@@ -176,7 +179,8 @@ endpoints:
       anti_forgery:     n/a
       authorization:    unknown
 
-  - method: "SignalR"
+  - id: signalr_stafftaskshub
+    method: "SignalR"
     url: "stafftaskshub"
     purpose: "Receive push notifications when any task is recorded; updates the tasks_recorded counter in real time."
     response_kind: json
@@ -200,7 +204,7 @@ authorization:
       - "url_path: /Care/Tracking/{communityId}"
       - "session: CurrentCommunityId (assumed; legacy MVC default — verify when source arrives)"
     tamper_matrix:
-      - endpoint: "GET /Care/Tracking/{communityId}"
+      - endpoint_id: shift_list_get
         scenarios:
           - kind: route_tenant_mismatch
             baseline_context: "Authenticated user with grant for community A."
@@ -210,7 +214,22 @@ authorization:
             observed_result: "untested — likely the legacy 'Unauthorized' HTML page (observed pattern elsewhere)"
             source_refs: ["unknown"]
             status: unknown
-
+          - kind: body_tenant_mismatch
+            baseline_context: "GET endpoint."
+            tampered_input: "n/a — GET has no body."
+            expected_status: "n/a"
+            expected_shape: n/a
+            observed_result: "n/a — GET takes no body"
+            source_refs: []
+            status: n/a
+          - kind: foreign_key_ownership
+            baseline_context: "GET endpoint."
+            tampered_input: "n/a — community id is the only tenant reference; covered by route_tenant_mismatch."
+            expected_status: "n/a"
+            expected_shape: n/a
+            observed_result: "n/a — no nested foreign keys for this read"
+            source_refs: []
+            status: n/a
           - kind: revoked_grant
             baseline_context: "User initially has grant for community A; admin revokes mid-session."
             tampered_input: "User refreshes /Care/Tracking/A or navigates back to it."
@@ -219,7 +238,6 @@ authorization:
             observed_result: "untested"
             source_refs: ["unknown"]
             status: unknown
-
           - kind: read_vs_write
             baseline_context: "User has read-only grant for community A (can view, not record)."
             tampered_input: "User views the summary card; observation: are tasks_recorded counts visible without write permission?"
@@ -228,6 +246,92 @@ authorization:
             observed_result: "untested"
             source_refs: ["unknown"]
             status: unknown
+
+      - endpoint_id: editor_navigation
+        scenarios:
+          - kind: route_tenant_mismatch
+            baseline_context: "Authenticated user with grant for community A."
+            tampered_input: "Click Record Care, then manually edit the URL communityId in the editor route to community B."
+            expected_status: "deny"
+            expected_shape: html_full
+            observed_result: "untested"
+            source_refs: ["unknown"]
+            status: unknown
+          - kind: body_tenant_mismatch
+            baseline_context: "GET navigation."
+            tampered_input: "n/a — GET has no body."
+            expected_status: "n/a"
+            expected_shape: n/a
+            observed_result: "n/a"
+            source_refs: []
+            status: n/a
+          - kind: foreign_key_ownership
+            baseline_context: "GET navigation; URL contains shiftId."
+            tampered_input: "Manually edit shiftId in the URL to a shiftId belonging to a different community."
+            expected_status: "deny"
+            expected_shape: html_full
+            observed_result: "untested"
+            source_refs: ["unknown"]
+            status: unknown
+          - kind: revoked_grant
+            baseline_context: "User had grant; admin revokes."
+            tampered_input: "User clicks Record Care from a stale page."
+            expected_status: "deny"
+            expected_shape: html_full
+            observed_result: "untested"
+            source_refs: ["unknown"]
+            status: unknown
+          - kind: read_vs_write
+            baseline_context: "User has read grant but not write."
+            tampered_input: "User reaches the editor (read view); writes are gated separately on the editor's POST."
+            expected_status: "allow read; deny write"
+            expected_shape: html_full
+            observed_result: "untested"
+            source_refs: ["unknown"]
+            status: unknown
+
+      - endpoint_id: signalr_stafftaskshub
+        scenarios:
+          - kind: route_tenant_mismatch
+            baseline_context: "User authenticated for community A; SignalR connection negotiated for that user."
+            tampered_input: "Inspect the negotiate request to see if the channel scopes by community; attempt to subscribe to community B's channel."
+            expected_status: "deny"
+            expected_shape: n/a
+            observed_result: "untested — must inspect SignalR connection scoping"
+            source_refs: ["unknown"]
+            status: unknown
+          - kind: body_tenant_mismatch
+            baseline_context: "Push channel; client receives, doesn't send."
+            tampered_input: "n/a — push frames are server-emitted."
+            expected_status: "n/a"
+            expected_shape: n/a
+            observed_result: "n/a"
+            source_refs: []
+            status: n/a
+          - kind: foreign_key_ownership
+            baseline_context: "Push frames carry task ids."
+            tampered_input: "n/a from the client; the concern is whether the server restricts which tasks it pushes per connection."
+            expected_status: "deny push of cross-tenant frames"
+            expected_shape: n/a
+            observed_result: "untested — must verify server-side filter on which frames go to which connections"
+            source_refs: ["unknown"]
+            status: unknown
+          - kind: revoked_grant
+            baseline_context: "User had grant; admin revokes."
+            tampered_input: "Open SignalR connection persists with stale identity."
+            expected_status: "Connection should be closed or further frames suppressed."
+            expected_shape: n/a
+            observed_result: "untested — verify SignalR Hub OnDisconnected / authorization filter behavior on grant revocation"
+            source_refs: ["unknown"]
+            status: unknown
+          - kind: read_vs_write
+            baseline_context: "Push channel is read-only from the client's perspective."
+            tampered_input: "n/a"
+            expected_status: "n/a"
+            expected_shape: n/a
+            observed_result: "n/a — push channel is read-only"
+            source_refs: []
+            status: n/a
 
 # ──────────────── Failure matrix ────────────────
 # Read-only slice — most cells are n/a. SignalR-related cells matter because

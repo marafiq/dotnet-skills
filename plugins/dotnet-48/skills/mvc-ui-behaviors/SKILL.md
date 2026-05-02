@@ -181,16 +181,27 @@ Two artifact-template blocks are **required** for the slices they apply to:
 
 ## Contract-completeness gate
 
-Every artifact carries `contract_status: complete | incomplete` at the frontmatter root. A slice is `complete` only when:
+Every artifact carries `contract_status: complete | incomplete` at the frontmatter root. A slice is `complete` only when **every** rule below holds:
 
-- All required `failure_matrix` cells (mutating slices) have `status ∈ {source_confirmed, observed}` (NOT `unknown`).
-- All required `tenant_boundary.tamper_matrix` scenarios (scoped or tenant-routed slices) have `status ∈ {source_confirmed, observed}`.
-- All `endpoints[].verification` aspects relevant to the endpoint's role are at status ∈ `{source_confirmed, observed, observed_partial, n/a}` (NOT `unknown`).
-- All required validation messages, business_logic.selection.rules, and authorization.action_authorization entries are non-null.
+1. **Endpoints — `method` and `route` verification.** Each endpoint has `verification.method` and `verification.route` at `observed | source_confirmed`. `unknown` is BLOCKING.
+2. **Endpoints — security-sensitive aspects.** For *mutating* endpoints (POST / PUT / DELETE) and *tenant-scoped* endpoints (any endpoint listed in `tenant_boundary.tamper_matrix`), each of `payload_schema`, `error_shape`, `anti_forgery`, `authorization` must be `observed | source_confirmed | n/a`. `observed_partial` is BLOCKING unless an explicit exception is listed in `contract_status_exceptions` with `reason` and `risk_owner`. `unknown` is BLOCKING.
+3. **Failure matrix.** For slices with mutating endpoints, every required cell (`http_4xx`, `http_5xx`, `network_timeout`, `double_click_or_resubmit`, `retry_after_failure`, `partial_success`, `refresh_mid_flight`, `context_switch_mid_edit`, `push_disconnect`, `idempotency_strategy`, `queue_retention`) must be `observed | source_confirmed | n/a`. `unknown` is BLOCKING. The canonical enum is exactly those four values — `observed_partial` and `inferred` are not valid `failure_matrix` statuses; partial knowledge is treated as `unknown` for gating.
+4. **Tenant tamper matrix.** Every tenant-scoped endpoint (referenced by `endpoint_id`) must have a row in `tenant_boundary.tamper_matrix`. For each row, every required scenario (`route_tenant_mismatch`, `body_tenant_mismatch`, `foreign_key_ownership`, `revoked_grant`, `read_vs_write`) must be `observed | source_confirmed | n/a`. Missing rows or `unknown` scenarios are BLOCKING. `n/a` is acceptable when justified in `observed_result`.
+5. **Required content.** `validation[].message`, `business_logic.selection.rules`, and `authorization.action_authorization[].on_denied` must be non-null where the slice has those affordances.
 
-Otherwise: `incomplete`. `contract_status_reason` lists the gating gaps. The downstream rewrite session should treat `incomplete` artifacts as in-progress contracts — they can inform implementation but should not be sole source-of-truth for production work.
+Otherwise: `incomplete`. `contract_status_reason` lists the gating gaps; `contract_status_exceptions` records any structurally-allowed `observed_partial` cases with reason + risk_owner.
 
-A fresh LLM session producing artifacts at scale must **not** mark `contract_status: complete` unless all preconditions hold. This is the structural gate that prevents `unknown` cells from sneaking past as "verified."
+The downstream rewrite session treats `incomplete` artifacts as in-progress contracts — informative for implementation but not sole source-of-truth for production work. A fresh LLM session producing artifacts at scale must **not** mark `contract_status: complete` unless every gate above is structurally satisfied.
+
+## Endpoint identity for cross-references
+
+Every entry under `endpoints[]` carries a stable kebab-case `id` (e.g. `record_care_post`, `editor_navigation`, `signalr_stafftaskshub`). This id is referenced from:
+
+- `tenant_boundary.tamper_matrix[].endpoint_id` — every tenant-scoped endpoint must have a matching row.
+- `contract_status_exceptions[].aspect` — exception entries point at specific endpoint aspects via `endpoints[<id>].verification.<aspect>`.
+- Cross-artifact references (when one slice's reactivity targets an endpoint declared in another slice).
+
+Stable ids make completeness gates mechanically checkable rather than prose-only.
 
 ## Endpoint verification is per-aspect
 
