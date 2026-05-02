@@ -66,12 +66,29 @@ validation:
     trigger: "client+server (observed client; server unverified — fill when source arrives)"
     message: "Country is required."
 endpoints:
-  - method: GET
+  - id: states_for_country
+    method: GET
     url: "/Address/StatesForCountry"
     purpose: "Return states for the selected country (cascading source)."
-    requires_anti_forgery: "unknown — fill when source arrives"
-    response_kind: "json (observed)"
+    response_kind: json
+    mutates_state: false
+    verification:
+      method:           observed
+      route:            observed
+      payload_schema:   n/a
+      response_shape:   observed_partial
+      error_shape:      unknown
+      anti_forgery:     n/a   # GET, no anti-forgery; mutates_state: false
+      authorization:    unknown
+    verification_evidence:
+      method:           { source_refs: [], observed_result: "GET observed in network during cascade", n/a_reason: null }
+      route:            { source_refs: [], observed_result: "URL captured", n/a_reason: null }
+      payload_schema:   { source_refs: [], observed_result: null, n/a_reason: "GET — no request body" }
+      response_shape:   { source_refs: [], observed_result: "JSON list of {id, name}", n/a_reason: null }
+      anti_forgery:     { source_refs: [], observed_result: null, n/a_reason: "GET, mutates_state: false; anti-forgery does not apply" }
 ```
+
+Schema reminder (Mode B authoring at scale): `mutates_state` is a required scalar field on every endpoint (gate rule 2). Anti-forgery `n/a` is acceptable for non-mutating GETs but BLOCKING on GET-shaped writes — see SKILL.md gate rule 10.
 
 The marker tells the downstream LLM: *"This is a known gap, not an oversight."* When source arrives, fill it in.
 

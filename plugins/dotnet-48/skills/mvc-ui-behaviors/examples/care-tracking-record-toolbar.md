@@ -1,5 +1,5 @@
 ---
-schema_version: 5
+schema_version: 6
 
 # ──────────────── Identity ────────────────
 id: care-tracking-record-toolbar
@@ -54,21 +54,56 @@ data_source:
 # ──────────────── Server-side business logic ────────────────
 business_logic:
   selection:
-    rules:
-      - "The toolbar's 'X of Y recorded' counter reflects the count of completed care tasks for this shift on this date — same source as the summary card on /Care/Tracking/{communityId}."
-    code_refs: ["unknown — fill when source arrives"]
+    # The toolbar's "X of Y recorded" counter reflects committed care
+    # tasks for this shift on this date — same data source as the summary
+    # card. Atomic predicates below; rules_summary is a human-reader
+    # narrative, not a substitute for the structured fields (gate rule 5).
+    predicates:
+      - rule: "TaskRecord.CommunityId = {communityId}"
+        status: unknown
+        evidence: "untested — controller / repository unknown"
+        rationale: "scope to current community"
+      - rule: "TaskRecord.ShiftDate = {date}"
+        status: unknown
+        evidence: "untested — fill when source arrives"
+        rationale: "scope to selected shift date"
+      - rule: "TaskRecord.IsCompleted = true (for the X count) OR plan-task TOTAL (for the Y count)"
+        status: unknown
+        evidence: "untested — actual derivation unverified"
+        rationale: "X-of-Y aggregation"
+    projection:
+      fields: ["X (completed count)", "Y (total count)"]
+      status: observed
+      evidence: { test_id: "probe_toolbar_render" }   # observed during exploration; both numbers visible in toolbar render
+    ordering:
+      sort_keys: []   # toolbar is a counter; no ordering applies
+      user_changeable: false
+      status: n/a
+      evidence: "n/a — counter, not a list"
+    paging:
+      default_size: null
+      server_side: false
+      status: n/a
+      evidence: "n/a — counter, not a list"
+    rules_summary: >
+      The toolbar's 'X of Y recorded' counter aggregates committed care
+      tasks for the current community + shift + date. The X count
+      advances both via SignalR push after this toolbar's own POST and
+      after another user's POST in the same shift; the Y count is the
+      planned-task total for that shift.
+    code_refs: []   # populate when source arrives
 
   authorization_filters:
     - rule: "User must have permission to record care for this shift (rule unknown — fill when source arrives)."
       code_ref: "unknown"
+      status: unknown
 
   computed_fields:
     - name: queue_count
       derivation: "Client-side: count of per-row actions (Completed / Not Completed) that have local state but haven't been committed. Reset to 0 on successful POST."
       code_ref: "unknown — likely a JS handler attached to per-row buttons"
+      status: observed   # observed during browser exercise
 
-  ordering: null
-  paging: null
   soft_delete: null
   temporal_scoping: "Bound to the {date} segment in the URL (the shift's date)."
 
@@ -76,9 +111,11 @@ business_logic:
     - kind: audit_entry
       description: "Each task recorded likely writes an audit entry. Whether visible elsewhere is unknown."
       code_ref: "unknown"
+      status: unknown
     - kind: signalr_push
       description: "POST returns 200 → server emits SignalR push on `stafftaskshub` → summary card counter and any in-page progress indicators advance within ~1–3 s."
       code_ref: "unknown — fill when source arrives"
+      status: observed   # the cause→effect was observed end-to-end during exploration; hub method/frame schema unverified is captured separately under endpoints[stafftaskshub_push]
 
 # ──────────────── Regulated data handling ────────────────
 # This slice WRITES care records — medical-care entries that are PHI under
@@ -505,7 +542,7 @@ failure_matrix:
   context_switch_mid_edit:
     status:   observed
     behavior: "Switching the community selector while the queue has items silently discards the queue (observed at dashboard-community-selector). No confirmation prompt; data loss is silent. rewrite_intent: improve."
-    evidence: "Observed during exploration: queue cleared without prompt on community switch."
+    evidence: { test_id: "probe_context_switch_discards_queue" }
   push_disconnect:
     status:   unknown
     behavior: "If SignalR drops during the 1–3 s settle window, the counter advancement may be missed entirely. The POST itself succeeds; only the live UI feedback is lost. Refresh recovers, but stale counter persists between."

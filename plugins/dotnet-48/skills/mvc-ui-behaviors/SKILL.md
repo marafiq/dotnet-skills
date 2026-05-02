@@ -193,7 +193,7 @@ Every artifact carries `contract_status: complete | incomplete` at the frontmatt
 
 4. **Tenant tamper matrix.** When tenant_boundary is required (per the trigger conditions above — explicit OR implicit tenant context), every tenant-scoped endpoint (referenced by `endpoint_id`) must have a row in `tenant_boundary.tamper_matrix`. For each row, every required scenario (`route_tenant_mismatch`, `body_tenant_mismatch`, `foreign_key_ownership`, `revoked_grant`, `read_vs_write`) must be `observed | source_confirmed | n/a`. Missing rows or `unknown` scenarios are BLOCKING. `n/a` is acceptable when justified in `observed_result`.
 
-5. **Required content.** `validation[].message`, `business_logic.selection.rules`, and `authorization.action_authorization[].on_denied` must be non-null where the slice has those affordances.
+5. **Required content.** `validation[].message` (verbatim error text), `business_logic.selection.predicates` (each as an atomic clause with status + evidence), `business_logic.selection.projection` (named fields), `business_logic.selection.ordering` (sort keys), and `authorization.action_authorization[].on_denied` must be non-null where the slice has those affordances. Free-prose `selection.rules_summary` is allowed for human readers but does NOT satisfy the gate by itself — the structured fields are the contract.
 
 6. **Evidence coherence.** Any cell at `status: observed | source_confirmed` must have non-empty supporting evidence. Specifically: `observed_result` ≠ `"untested" | "unknown" | empty`; `source_refs` ≠ `["unknown"] | empty`; `evidence` ≠ `"untested" | "unknown" | empty`. A green status with placeholder evidence is BLOCKING — this is "status laundering" and the gate explicitly rejects it.
 
@@ -294,4 +294,4 @@ A composite slice (e.g. a real-time-collaborative editable grid) decomposes into
 - [`references/code-pending-mode.md`](references/code-pending-mode.md) — narrow contingency when source is temporarily unavailable.
 - [`references/cross-slice-context.md`](references/cross-slice-context.md) — global context selectors, propagation modes, scoping declarations.
 - [`references/pattern-candidates.md`](references/pattern-candidates.md) — registry of proposed schema additions; `schema_version` history.
-- [`assets/artifact-template.md`](assets/artifact-template.md) — rich frontmatter schema accommodating all observed behavior types. Currently `schema_version: 5`.
+- [`assets/artifact-template.md`](assets/artifact-template.md) — rich frontmatter schema accommodating all observed behavior types. Currently `schema_version: 6`.

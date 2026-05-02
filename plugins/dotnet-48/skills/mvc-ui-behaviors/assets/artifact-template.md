@@ -2,9 +2,17 @@
 # ──────────────── Schema version ────────────────
 # Increment when the artifact schema changes in a way that breaks downstream
 # consumers (linters, the rewrite session, cross-artifact tooling). Current
-# version: 5 (Round 5 — typed evidence, n/a coherence, structured business
-# logic, regulated_data_handling block).
-schema_version: 5
+# version: 6.
+#
+# Version history (canonical: see references/pattern-candidates.md):
+#   v5 — Round 4 — added mutates_state, signal_sources.endpoint_id,
+#        cross_slice_refs_pending, concurrency_conflict + audit_emission
+#        failure cells, evidence coherence gate.
+#   v6 — Round 5 — typed evidence shape, n/a coherence gate (rule 10),
+#        structured business_logic.selection.{predicates, projection,
+#        ordering, paging} (REPLACES selection.rules), regulated_data_handling
+#        block + gate rule 11, schema_version field + gate rule 12.
+schema_version: 6
 
 # ──────────────── Identity ────────────────
 id: <kebab-case slug, e.g. care-tracking-record-toolbar>
@@ -14,53 +22,43 @@ view_lines: <e.g. 42-78, optional>
 control_type: <dropdown | textbox | textarea | checkbox | radio | grid | form | modal | drawer | wizard | wizard_step | toolbar | accordion | tab_set | side_menu | breadcrumb | datepicker | daterange | autocomplete | masked_input | numeric_input | toggle_buttons | rich_text | file_upload | loading_indicator | toast | confirmation_dialog | alert | paginator | pane | context_selector | card | custom>
 
 # ──────────────── Contract status ────────────────
-# `complete` only when EVERY rule below holds. The gate is mechanical —
-# a fresh LLM session producing artifacts at scale MUST NOT mark
-# contract_status: complete unless every rule passes structurally.
-# See SKILL.md "Contract-completeness gate" for the canonical rule list.
+# `complete` only when EVERY gate rule in SKILL.md "Contract-completeness
+# gate" passes structurally. The gate is mechanical — a fresh LLM session
+# producing artifacts at scale MUST NOT mark contract_status: complete
+# unless every rule passes.
 #
-# Summary (canonical wording lives in SKILL.md):
-#   1. Endpoint method/route verification at observed | source_confirmed.
-#   2. For MUTATING endpoints (any endpoint with mutates_state: true OR
-#      method ∈ {POST, PUT, PATCH, DELETE}) and TENANT-SCOPED endpoints:
-#      payload_schema, error_shape, anti_forgery, authorization at
-#      observed | source_confirmed | n/a. observed_partial requires an
-#      explicit contract_status_exceptions entry.
-#   3. failure_matrix cells (mutating slices) at observed | source_confirmed | n/a.
-#   4. tenant_boundary required when ANY of: scoped_by non-null;
-#      routes contain a tenant placeholder; business_logic carries a tenant
-#      filter; context_sources non-empty. tamper_matrix must have a row
-#      per tenant-scoped endpoint with all required scenario kinds.
-#   5. Required content (validation messages, business_logic rules,
-#      action_authorization on_denied) non-null where applicable.
-#   6. Evidence coherence: any cell at status: observed | source_confirmed
-#      must have non-empty observed_result / source_refs / evidence
-#      (NOT "untested" / "unknown" / empty / placeholder).
-#   7. Cross-slice refs (scoped_by, related_controls[].id, signal_sources
-#      pointing at sibling artifacts) must resolve to artifact ids that
-#      exist in the corpus. Unresolved refs force incomplete unless listed
-#      under cross_slice_refs_pending with reason.
-#   8. Mode B unknowns: unknowns_to_fill_when_source_arrives MUST NOT
-#      contain entries that mention endpoint paths, authorization, tenant
-#      boundary, anti-forgery, or business_logic — those are gate-critical
-#      and force incomplete.
-#   9. SignalR / SSE coverage: every signal_source of kind signalr|sse must
-#      have a matching endpoints[] entry with stable id, AND that endpoint
-#      participates in tamper_matrix and failure_matrix.push_disconnect.
+# SKILL.md is the SINGLE SOURCE OF TRUTH for the rule list. Keeping a
+# parallel summary here causes drift; deliberate pointer-only.
 contract_status: <complete | incomplete>
 contract_status_reason: <prose: which required cells/scenarios are unknown or untested; what evidence is missing>
 contract_status_exceptions:
-  # Optional. Used only when an aspect is structurally `observed_partial`
-  # but the slice is still claimed `complete`. Each exception MUST carry
-  # an explicit reason and a risk owner (named human or role). Default
-  # behavior of the gate is to BLOCK `complete` on `observed_partial`
-  # for security-sensitive aspects (payload_schema, error_shape,
-  # anti_forgery, authorization on mutating or tenant-scoped endpoints).
+  # Used when a slice is claimed `complete` but a structurally-blocking
+  # status is being explicitly waived. Each exception MUST carry an
+  # explicit reason and a risk owner (named human or role).
+  #
+  # Two waiver shapes are accepted:
+  #
+  #   state: observed_partial
+  #     For aspects that are partially-verified on security-sensitive
+  #     fields. Default: BLOCKING. Waiver requires reason + risk_owner.
+  #
+  #   state: na_waiver
+  #     For aspects at status: n/a on gate-critical fields where the
+  #     n/a is a deliberate choice rather than a structural truth.
+  #     Specifically required when: verification.authorization: n/a,
+  #     verification.error_shape: n/a, or verification.anti_forgery: n/a
+  #     on a mutating (mutates_state: true) or tenant-scoped endpoint.
+  #     Without an na_waiver entry, the gate (rule 10) blocks `complete`.
+  #
+  # Anti-forgery `n/a` on a GET-shaped write is the canonical case
+  # demanding na_waiver — the legacy app may not enforce anti-forgery
+  # on link-triggered state changes, but the rewrite must surface that
+  # explicitly rather than waive it silently.
   - aspect: <e.g. "endpoints[record_care_post].verification.payload_schema">
-    state: observed_partial
-    reason: <prose: why partial is acceptable for this slice/endpoint>
+    state: <observed_partial | na_waiver>
+    reason: <prose: why partial / why n/a is acceptable for this slice/endpoint>
     risk_owner: <name or role>
-    follow_up: <prose: what work would close the gap>
+    follow_up: <prose: what work would close the gap, or "no follow-up — n/a is structurally correct">
 
 # Optional. Used when this slice's frontmatter references a sibling artifact
 # id that has not yet been authored. Forces contract_status: incomplete by
@@ -238,6 +236,14 @@ configuration:
 
   # Conditionally-present slices (slice doesn't exist until state changes)
   presence_condition: <prose: "after first record action" | "user has role X" | null>
+
+  # ── for context selectors (community / facility / fiscal year / locale)
+  # Describes how a selection change propagates to scoped slices in the app.
+  # See references/cross-slice-context.md for the canonical mode list.
+  behavior_propagation:
+    on_change: <full_page_reload | soft_refresh_all_scoped | session_only_no_refresh>
+    persists_across_navigation: <true | false>
+    persistence_layer: <session | cookie | querystring | url_path | "unknown — fill when source arrives">
 
   # Multi-state slices (different appearance / labels per state)
   states: [<state names, e.g. punched_in, punched_out>]

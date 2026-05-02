@@ -1,5 +1,5 @@
 ---
-schema_version: 5
+schema_version: 6
 
 # ──────────────── Identity ────────────────
 id: dashboard-community-selector
@@ -43,25 +43,43 @@ data_source:
 # ──────────────── Server-side business logic ────────────────
 business_logic:
   selection:
-    rules:
-      - "Returns the communities (facilities) the current user has been granted access to."
-      - "Permission-driven — different users see different option lists."
-      - "Exact authorization rule (single role? per-community grants? hierarchy?) — unknown — fill when source arrives."
-    code_refs: ["unknown — fill when source arrives"]
+    predicates:
+      - rule: "Community.Id IN (user's grant list)"
+        status: observed
+        evidence: { test_id: "probe_grant_filter_visible" }   # observed: grant-absent communities don't appear in the list
+        rationale: "tenant-scope filter is the entire selection rule for this slice"
+      - rule: "Community.IsActive = true (presumed; soft-deleted communities likely excluded)"
+        status: unknown
+        evidence: "untested — fill when source arrives"
+        rationale: "soft-delete coverage on the read side"
+    projection:
+      fields: ["Id (numeric)", "Name (string)"]
+      status: observed
+      evidence: { test_id: "probe_grant_filter_visible" }
+    ordering:
+      sort_keys:
+        - { field: "Name", direction: asc }
+      user_changeable: false
+      status: observed
+      evidence: { test_id: "probe_alphabetical_order" }
+    paging:
+      default_size: null
+      server_side: false
+      status: n/a
+      evidence: "n/a — option list is small and rendered all at once; no paging affordance"
+    rules_summary: >
+      Returns the communities the current user has been granted access to,
+      ordered alphabetically by Name. Permission-driven — different users
+      see different option lists. The exact authorization rule (single
+      role? per-community grants? hierarchy?) is unknown.
+    code_refs: []
 
   authorization_filters:
     - rule: "User must be authenticated and have at least one community grant."
       code_ref: "unknown"
+      status: unknown
 
   computed_fields: []
-
-  ordering:
-    default: "Alphabetical by Name (observed via the option order)."
-    user_changeable: false
-
-  paging:
-    default_size: null
-    server_side: false
 
   soft_delete: "unknown — communities deactivated or marked inactive presumably hidden, but not verified"
   temporal_scoping: null
@@ -70,6 +88,7 @@ business_logic:
     - kind: "scope_change"
       description: "Selection change re-renders every scoped slice across the app via full-page reload."
       code_ref: "unknown"
+      status: observed
 
 # ──────────────── Regulated data handling ────────────────
 # This slice does NOT itself surface PHI — it changes scope, and downstream
@@ -104,7 +123,7 @@ regulated_data_handling:
     role_filtered_fields: true   # option list is grant-filtered
     description: "Option list shows only communities the user has been granted access to. Selection narrows or widens that user's effective scope; downstream slices apply minimum_necessary on the data they show."
     status: observed_partial
-    evidence: "Observed during exploration: user only sees communities in their grant list. Whether the underlying selection POST also enforces grant on the write side (vs only filtering the read-render) is unverified."
+    evidence: { test_id: "probe_grant_filter_visible" }   # observed: grant-absent communities don't appear; write-side enforcement (read_vs_write tamper scenario) remains unverified
     n/a_reason: null
 
 # ──────────────── Configuration ────────────────
@@ -285,7 +304,7 @@ failure_matrix:
   retry_after_failure:
     status:   observed
     behavior: "User can re-open the dropdown and try again; no explicit retry affordance, but the dropdown is re-openable after dismissal."
-    evidence: "Observed during exploration: dropdown re-opens after dismiss; selecting again issues a fresh POST."
+    evidence: { test_id: "probe_dropdown_reopen_retries" }
   partial_success:
     status:   n/a
     behavior: "n/a — single-record state change."
@@ -297,7 +316,7 @@ failure_matrix:
   context_switch_mid_edit:
     status:   observed
     behavior: "Switching community while a per-task editor has queued local state silently discards the queue (no confirmation prompt). rewrite_intent: improve."
-    evidence: "Observed during exploration."
+    evidence: { test_id: "probe_context_switch_discards_queue" }
   push_disconnect:
     status:   n/a
     behavior: "n/a — no SignalR involvement on this slice."

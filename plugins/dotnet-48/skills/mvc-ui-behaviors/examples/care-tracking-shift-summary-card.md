@@ -1,5 +1,5 @@
 ---
-schema_version: 5
+schema_version: 6
 
 # ──────────────── Identity ────────────────
 id: care-tracking-shift-summary-card
@@ -55,37 +55,65 @@ data_source:
 # ──────────────── Server-side business logic ────────────────
 business_logic:
   selection:
-    rules:
-      - "Returns the shift cards for the community in `/Care/Tracking/{communityId}` for the selected date."
-      - "Multiple shifts visible at once (PREVIOUS / CURRENT / NEXT relative to current time on the selected date)."
-      - "Selection rule for which shifts appear (current-day? next 24h? configured per community?) — unknown — fill when source arrives."
-    code_refs: ["unknown — fill when source arrives"]
+    predicates:
+      - rule: "Shift.CommunityId = {communityId}"
+        status: unknown
+        evidence: "untested — controller / repository unknown"
+        rationale: "scope to community"
+      - rule: "Shift.Date = {selectedDate}"
+        status: observed
+        evidence: { test_id: "probe_date_change_reload" }   # observed: date selector reloads card with new date's shifts
+        rationale: "scope to selected day"
+      - rule: "shift_label = PREVIOUS | CURRENT | NEXT (relative to current time on selectedDate)"
+        status: observed
+        evidence: { test_id: "probe_three_shifts_visible" }   # three labelled cards observed during exploration
+        rationale: "label is server-derived from current time, not just shift start"
+    projection:
+      fields: ["shift_name", "shift_label", "shift_time_range", "items_unassigned", "total_estimated_minutes", "tasks_recorded", "tasks_total", "time_remaining_minutes", "tasks_remaining", "category_badges"]
+      status: observed
+      evidence: { test_id: "probe_card_render" }   # all listed fields visible during exploration
+    ordering:
+      sort_keys:
+        - { field: "shift_start_time", direction: asc }
+      user_changeable: false
+      status: observed
+      evidence: { test_id: "probe_three_shifts_visible" }
+    paging:
+      default_size: null
+      server_side: false
+      status: n/a
+      evidence: "n/a — page renders all shifts for the day at once; no paging affordance observed"
+    rules_summary: >
+      Returns the shift cards for the community in
+      /Care/Tracking/{communityId} for the selected date. Multiple
+      shifts (PREVIOUS / CURRENT / NEXT) are visible at once; the label
+      is derived from current time on the selected date. Selection rule
+      for which shifts appear (current-day? next 24h? configured per
+      community?) — unknown.
+    code_refs: []   # populate when source arrives
 
   authorization_filters:
     - rule: "Scoped to the community in the URL. Authorization rule for which communities the current user can see — unknown — fill when source arrives."
       code_ref: "unknown"
+      status: unknown
 
   computed_fields:
     - name: tasks_recorded
       derivation: "Count of completed care tasks for the shift on the selected date. Updated via SignalR push from `stafftaskshub` after each record action."
       code_ref: "unknown — fill when source arrives"
+      status: observed   # the live update was observed; the underlying derivation is the unknown
     - name: time_remaining_minutes
       derivation: "Estimated remaining time for unrecorded tasks. Likely = total_estimated_minutes − recorded_minutes. Exact rule unknown — fill when source arrives."
       code_ref: "unknown"
+      status: unknown
     - name: tasks_remaining
       derivation: "tasks_total − tasks_recorded."
       code_ref: "unknown"
+      status: observed   # values consistent with subtraction during exploration
     - name: shift_label
       derivation: "Position relative to the current time on the selected date (PREVIOUS / CURRENT / NEXT)."
       code_ref: "unknown"
-
-  ordering:
-    default: "Likely shift start time ascending; observed left-to-right as PREVIOUS → CURRENT → NEXT — confirm rule when source arrives."
-    user_changeable: false
-
-  paging:
-    default_size: null
-    server_side: false
+      status: observed   # observed labelling
 
   soft_delete: "unknown — fill when source arrives"
   temporal_scoping: "Page is 'Care for Today' by default; a 'Change' link suggests date selection. Mechanism unknown — fill when source arrives."
@@ -94,6 +122,7 @@ business_logic:
     - kind: audit_entry
       description: "Each task recorded in the editor (downstream slice) likely writes an audit entry. Whether the entry surfaces anywhere on this card is unknown."
       code_ref: "unknown"
+      status: unknown
 
 # ──────────────── Regulated data handling ────────────────
 # This card displays counters and shift metadata at the community level.

@@ -30,21 +30,21 @@ control_type: dropdown
 configuration:
   searchable: true
   multi_select: false
-  default_value: "user's last selection"   # or alphabetical, or first-permitted
+  behavior_propagation:
+    on_change: full_page_reload            # or soft_refresh_all_scoped | session_only_no_refresh
+    persists_across_navigation: true
+    persistence_layer: session              # session | cookie | querystring | url_path
 data_source:
   kind: api
   reference: "Communities the current user has access to"
   populated_by: "<controller action>"
   fields: { value: Id, text: Name }
-behavior_propagation:
-  on_change: full_page_reload              # or "soft_refresh_all_scoped" or "session_only_no_refresh"
-  persists_across_navigation: true
-  persistence_layer: session                # session | cookie | querystring | url_path
+  default_value: "user's last selection"    # or alphabetical, or first-permitted
 related_controls:
   # Every scoped slice in the app, listed here as targets
 ```
 
-`behavior_propagation` is the key. Three common modes:
+`configuration.behavior_propagation` is the key. Three common modes:
 
 | Mode | What happens on change |
 |---|---|

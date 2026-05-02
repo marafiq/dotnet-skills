@@ -126,7 +126,7 @@ How data gets to the server.
 
 **Multi-action submit** is common: the same form has multiple submit buttons with different post-submit flows. *"Create"* might re-open the form for another entry; *"Create and Go To"* navigates to the new record. Capture each action's flow distinctly.
 
-Capture **anti-forgery** requirements: `requires_anti_forgery: true` on each endpoint that needs it (most POSTs in MVC 5 do).
+Capture **anti-forgery** requirements via `endpoints[].verification.anti_forgery` (status: observed | source_confirmed | n/a). For mutating endpoints (`mutates_state: true`), `n/a` is BLOCKING unless explicitly waived under `contract_status_exceptions[]` with reason + risk_owner — the legacy app may skip CSRF on link-triggered state changes, but the rewrite must surface the gap explicitly. Most POSTs in MVC 5 require an `__RequestVerificationToken` form field; this should be `observed` or `source_confirmed`.
 
 ## 7. Result handling
 
@@ -218,16 +218,17 @@ Global selectors that scope every other slice. Treat the selector as a slice; ma
 
 ```yaml
 # context selector slice
-control_type: dropdown
+control_type: context_selector
 title: "Community / facility selector"
 configuration:
   searchable: true
   multi_select: false
+  behavior_propagation:
+    on_change: full_page_reload
+    persists_across_navigation: true
+    persistence_layer: session
+data_source:
   default_value: "user's last selection"
-behavior_propagation:
-  on_change: full_page_reload
-  persists_across_navigation: true
-  persistence_layer: session
 ```
 
 Three propagation modes:
