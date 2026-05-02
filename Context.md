@@ -55,7 +55,8 @@ One Markdown artifact per slice (YAML frontmatter + Markdown body). Format chose
 
 ### Operating principles for the skill itself
 
-- **Skill operates automatically when invoked.** Activates on its description trigger and exercises judgment within the framework — not a rigid prescriptive procedure. *Don't over-specify*.
+- **Browser work must be repeatable / semi-deterministic.** Step 2 is not free-form exploration — it's a concrete procedure two sessions can execute and arrive at equivalent claims. The skill prescribes probe sequences (arm network → locate by visible label → trigger → wait the documented settle window → re-observe → diff against prior state) so the verify/improve/enrich loop is automatable, not improvisational.
+- **Don't over-specify the surrounding workflow.** The skill provides framework + judgment cues for slice identification, classification, and prose phrasing. The browser playbook is the prescriptive part; the rest exercises judgment within the framework.
 - **Taxonomy is a framework, not a checklist.** When a slice surfaces a behavior the categories don't cover, extend the schema explicitly and ask the user — don't shoehorn into the closest existing category.
 - **Privacy-first.** Observed real data (resident names, room numbers, dates of birth, etc.) never appears in artifact prose. Genericize. Specifics live only in the verification log for human reviewers.
 - **Domain.** Senior Living. Real residents, real care, regulated industry. Extreme ownership: claims must be defensible against evidence; nothing speculative passes as verified.
