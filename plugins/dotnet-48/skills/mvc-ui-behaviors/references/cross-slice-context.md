@@ -17,7 +17,7 @@ Examples from real apps:
 - *Effective date* picker that re-scopes financial dashboards.
 - *Locale* selector that changes language and date formats throughout.
 
-Sometimes there's just one. Sometimes there are several stacked (community + effective date + report period, all global on the same page).
+Sometimes one. Sometimes several stacked (community + effective date + report period, all global on the same page).
 
 ## Treat the selector as a slice
 

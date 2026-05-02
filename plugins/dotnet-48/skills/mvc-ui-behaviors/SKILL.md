@@ -46,6 +46,8 @@ A *slice* is a coherent user-visible unit. Examples:
 
 Each slice is one Markdown file: rich YAML frontmatter for structured fields + Markdown body for prose claims the verification step exercises.
 
+**Larger features decompose into multiple linked slice artifacts.** The Care Tracking feature, for example, surfaces as several slices: the shift summary card, the per-task editor, the commit toolbar, the filter bar, the sort segmented controls. Each gets its own focused artifact (typically 100–250 lines); they link via `related_controls` (parent / child / sibling / trigger / target) and `scoped_by` for global context. The feature is the graph of artifacts, not one mega-document — small, linked artifacts beat one verbose file for both authoring economy and downstream consumption.
+
 ## Workflow
 
 ```
