@@ -7,19 +7,39 @@ view_lines: <e.g. 42-78, optional>
 control_type: <dropdown | textbox | textarea | checkbox | radio | grid | form | modal | drawer | wizard | wizard_step | toolbar | accordion | tab_set | side_menu | breadcrumb | datepicker | daterange | autocomplete | masked_input | numeric_input | toggle_buttons | rich_text | file_upload | loading_indicator | toast | confirmation_dialog | alert | paginator | pane | context_selector | card | custom>
 
 # ──────────────── Contract status ────────────────
-# `complete` only when:
-#   - All required `failure_matrix` cells (for slices with mutating endpoints)
-#     have status ∈ {source_confirmed, observed} (NOT unknown).
-#   - All required `tenant_boundary.tamper_matrix` scenarios (for scoped or
-#     tenant-routed slices) have status ∈ {source_confirmed, observed}.
-#   - All `endpoints[].verification` aspects relevant to the endpoint's role
-#     are at status ∈ {source_confirmed, observed, observed_partial, n/a}
-#     (NOT unknown).
-#   - All required validation messages, business_logic.selection.rules, and
-#     authorization.action_authorization entries are non-null.
-# Otherwise: `incomplete`. Each gating gap is listed in `contract_status_reason`.
-# A fresh LLM session producing this artifact at scale must NOT mark
-# contract_status: complete unless those preconditions hold.
+# `complete` only when EVERY rule below holds. The gate is mechanical —
+# a fresh LLM session producing artifacts at scale MUST NOT mark
+# contract_status: complete unless every rule passes structurally.
+# See SKILL.md "Contract-completeness gate" for the canonical rule list.
+#
+# Summary (canonical wording lives in SKILL.md):
+#   1. Endpoint method/route verification at observed | source_confirmed.
+#   2. For MUTATING endpoints (any endpoint with mutates_state: true OR
+#      method ∈ {POST, PUT, PATCH, DELETE}) and TENANT-SCOPED endpoints:
+#      payload_schema, error_shape, anti_forgery, authorization at
+#      observed | source_confirmed | n/a. observed_partial requires an
+#      explicit contract_status_exceptions entry.
+#   3. failure_matrix cells (mutating slices) at observed | source_confirmed | n/a.
+#   4. tenant_boundary required when ANY of: scoped_by non-null;
+#      routes contain a tenant placeholder; business_logic carries a tenant
+#      filter; context_sources non-empty. tamper_matrix must have a row
+#      per tenant-scoped endpoint with all required scenario kinds.
+#   5. Required content (validation messages, business_logic rules,
+#      action_authorization on_denied) non-null where applicable.
+#   6. Evidence coherence: any cell at status: observed | source_confirmed
+#      must have non-empty observed_result / source_refs / evidence
+#      (NOT "untested" / "unknown" / empty / placeholder).
+#   7. Cross-slice refs (scoped_by, related_controls[].id, signal_sources
+#      pointing at sibling artifacts) must resolve to artifact ids that
+#      exist in the corpus. Unresolved refs force incomplete unless listed
+#      under cross_slice_refs_pending with reason.
+#   8. Mode B unknowns: unknowns_to_fill_when_source_arrives MUST NOT
+#      contain entries that mention endpoint paths, authorization, tenant
+#      boundary, anti-forgery, or business_logic — those are gate-critical
+#      and force incomplete.
+#   9. SignalR / SSE coverage: every signal_source of kind signalr|sse must
+#      have a matching endpoints[] entry with stable id, AND that endpoint
+#      participates in tamper_matrix and failure_matrix.push_disconnect.
 contract_status: <complete | incomplete>
 contract_status_reason: <prose: which required cells/scenarios are unknown or untested; what evidence is missing>
 contract_status_exceptions:
@@ -34,6 +54,15 @@ contract_status_exceptions:
     reason: <prose: why partial is acceptable for this slice/endpoint>
     risk_owner: <name or role>
     follow_up: <prose: what work would close the gap>
+
+# Optional. Used when this slice's frontmatter references a sibling artifact
+# id that has not yet been authored. Forces contract_status: incomplete by
+# default; presence here ACKNOWLEDGES the gap rather than waiving it.
+cross_slice_refs_pending:
+  - ref: <unresolved-artifact-id>
+    referenced_from: <e.g. "scoped_by[0]" | "related_controls[2].id" | "signal_sources[0].artifact_ref">
+    reason: <prose: why this artifact does not yet exist in the corpus>
+    expected_to_land: <prose: when / by whom>
 
 # URLs where the user encounters this slice (same in legacy and rewrite — routes are preserved).
 # Use route-pattern syntax with named parameters; multiple entries when the slice appears in more than one place.
@@ -310,10 +339,17 @@ related_controls:
 # Which context selector(s) this slice's data is scoped by
 scoped_by: [<context-slice-id>] | null
 
-# Cross-slice signal sources beyond direct cascade
+# Cross-slice signal sources beyond direct cascade.
+# IMPORTANT for SignalR/SSE: each signalr|sse source MUST have a matching
+# entry in `endpoints[]` with a stable id (referenced via `endpoint_id`
+# below), and that endpoint must participate in tamper_matrix coverage and
+# failure_matrix.push_disconnect — otherwise tenant push-frame leakage and
+# disconnect behavior are structurally untracked.
 signal_sources:
   - kind: <signalr | sse | toast_bus | global_event | refresh_propagation>
     detail: <prose>
+    endpoint_id: <reference to endpoints[].id when kind ∈ {signalr, sse}; null otherwise>
+    artifact_ref: <sibling artifact id when this signal originates in another slice; null when local>
 
 # Behaviors when the slice closes / unmounts (for modals, drawers, wizards)
 on_close:
@@ -331,12 +367,23 @@ on_close:
 #   observed_partial — partially exercised (e.g. one path traced, others not)
 #   source_confirmed — confirmed in source code
 #   n/a              — not applicable for this endpoint kind (e.g. anti_forgery for GET)
+#
+# `mutates_state` decouples "is this a write?" from HTTP method. Legacy MVC
+# is full of GET-shaped writes (e.g. /Residents/{id}/Deactivate, link-
+# triggered status changes, queue-pop links). The mutating-endpoint gate
+# fires on `mutates_state: true` regardless of HTTP method.
 endpoints:
   - id: <stable kebab-case identifier; referenced from tenant_boundary.tamper_matrix and contract_status_exceptions>
-    method: <GET | POST | PUT | DELETE>
+    method: <GET | POST | PUT | PATCH | DELETE>
     url: <route path>
     purpose: <prose>
     response_kind: <html_full | html_partial | json | json_problem_details | redirect>
+    # Does this endpoint change server-side state the user would notice?
+    # - true  for any state-changing call regardless of HTTP method
+    # - false for pure reads (selects, server-rendered views, JSON list/get)
+    # If true, the mutating-endpoint gate applies; failure_matrix coverage,
+    # idempotency, anti-forgery, and audit assertions all become required.
+    mutates_state: <true | false>
     verification:
       method:           <unknown | observed | observed_partial | source_confirmed | n/a>
       route:            <unknown | observed | observed_partial | source_confirmed | n/a>
@@ -347,13 +394,15 @@ endpoints:
       authorization:    <unknown | observed | observed_partial | source_confirmed | n/a>
     # Gate rules for contract_status: complete:
     # - method, route at unknown    → BLOCKING
-    # - For MUTATING endpoints (POST/PUT/DELETE) AND/OR TENANT-SCOPED endpoints:
+    # - For MUTATING endpoints (mutates_state: true) AND/OR TENANT-SCOPED endpoints:
     #   payload_schema, error_shape, anti_forgery, authorization must be
     #   observed | source_confirmed | n/a. observed_partial is BLOCKING
     #   unless listed under contract_status_exceptions with reason + risk_owner.
-    # - For other GET endpoints: observed_partial acceptable for response_shape
-    #   when the endpoint returns a server-rendered HTML view (the rewrite
-    #   redefines the response surface anyway).
+    # - Evidence coherence: status observed | source_confirmed REQUIRES non-empty
+    #   evidence (observed_result / source_refs not "untested" / "unknown").
+    # - For pure-read GET endpoints (mutates_state: false): observed_partial
+    #   acceptable for response_shape when the endpoint returns server-rendered
+    #   HTML (the rewrite redefines the response surface anyway).
     # - Required cells in failure_matrix at status: unknown are BLOCKING.
 
 # ──────────────── Authorization ────────────────
@@ -370,10 +419,23 @@ authorization:
   re_auth_required: <true | false>
   re_auth_for: [<action slugs>]
 
-  # ── Tenant boundary (REQUIRED for any slice scoped_by a context selector
-  #    or whose endpoints carry a tenant id in the route).
+  # ── Tenant boundary (REQUIRED for any slice that touches tenant context,
+  #    not only those with a tenant id explicitly in the route).
   #
-  # Replaced free-form prose with a structured tamper matrix per endpoint.
+  # Trigger conditions (ANY one forces tenant_boundary to be populated and
+  # tamper_matrix to cover every relevant endpoint):
+  #   - scoped_by is non-null (slice consumes a context selector)
+  #   - routes contain a tenant placeholder ({communityId}, {facilityId}, …)
+  #   - business_logic.authorization_filters mentions a tenant filter
+  #   - business_logic.selection.rules mention community / facility / tenant
+  #   - context_sources is non-empty (session/cookie/claim carrying tenant)
+  #   - any reactivity endpoint posts a body field that resolves to a tenant
+  #
+  # Implicit / session-bound tenant context (e.g. /Residents/Profiles/{id}
+  # with community resolved from session) STILL requires tenant_boundary —
+  # this is the highest-risk shape because the developer can't see the
+  # tenant in the URL.
+  #
   # Required scenarios (each must appear at status source_confirmed or
   # observed before the endpoint is contract-complete):
   #   - route_tenant_mismatch   — URL tenant id ≠ session/permitted tenant
@@ -402,20 +464,30 @@ authorization:
             status: <unknown | observed | source_confirmed | n/a>
 
 # ──────────────── Failure matrix (REQUIRED for any slice with mutating endpoints) ────────────────
-# Each cell is structured: status + behavior + evidence. Cells at status:
-# unknown for required mutating-write semantics force contract_status:
-# incomplete at the artifact level.
+# A slice is "mutating" when ANY endpoint has mutates_state: true (NOT just
+# POST/PUT/DELETE — legacy GET-shaped writes count). Each cell is structured:
+# status + behavior + evidence. Cells at status: unknown for required
+# mutating-write semantics force contract_status: incomplete at the artifact
+# level.
 #
 # Required cells for mutating slices: http_4xx, http_5xx, network_timeout,
 # double_click_or_resubmit, retry_after_failure, partial_success,
 # refresh_mid_flight, context_switch_mid_edit, push_disconnect,
-# idempotency_strategy, queue_retention.
+# idempotency_strategy, queue_retention, concurrency_conflict,
+# audit_emission.
 #
 # Cells legitimately n/a are marked status: n/a (e.g. push_disconnect on a
-# slice with no SignalR involvement; partial_success on a non-batch endpoint).
+# slice with no SignalR involvement; partial_success on a non-batch endpoint;
+# concurrency_conflict on append-only journals). Mark with justification in
+# behavior + evidence.
+#
 # Canonical failure_matrix status enum: unknown | observed | source_confirmed | n/a
 # (NOT observed_partial — partial knowledge of failure semantics is treated as
 # unknown for gating purposes. NOT inferred — inferences are not evidence.)
+#
+# Evidence coherence: any cell at status: observed | source_confirmed MUST
+# have a non-empty `evidence` field (not "untested" / "unknown" /
+# placeholder). The gate enforces this — see SKILL.md gate rule 6.
 failure_matrix:
   http_4xx:
     status:   <unknown | observed | source_confirmed | n/a>
@@ -461,9 +533,23 @@ failure_matrix:
     status:   <unknown | observed | source_confirmed | n/a>
     behavior: <prose: client queue cleared on success only? on submit attempt? per-row immediately?>
     evidence: <code_ref or test_id or "untested">
+  concurrency_conflict:
+    status:   <unknown | observed | source_confirmed | n/a>
+    behavior: <prose: two users save the same record concurrently. Last-write-wins? Optimistic-lock with conflict prompt? Merge? Append-only no-conflict?>
+    evidence: <code_ref or test_id or "untested">
+  audit_emission:
+    status:   <unknown | observed | source_confirmed | n/a>
+    behavior: <prose: does the slice emit a user-visible audit row (Activity panel, change log, history pane)? Where does the user see it? Is the audit entry tied to the actor + timestamp + before/after values? `n/a` only when the slice is provably non-recordable (e.g. ephemeral UI toggle).>
+    evidence: <code_ref or test_id or "untested">
 
 # ──────────────── Mode B helpers ────────────────
 url_conventions_observed: [<prose: "/{controller}/{action}/{id}/Pane → drawer partial", …>]
+# `unknowns_to_fill_when_source_arrives` is gate-aware. Entries here that
+# describe gate-critical fields (endpoint paths/methods, anti_forgery,
+# authorization rules, tenant_boundary scenarios, business_logic.selection
+# rules, validation parameters, audit emission) FORCE contract_status:
+# incomplete. Mode B is a legitimate working mode but cannot ship `complete`
+# while security or correctness fundamentals are deferred.
 unknowns_to_fill_when_source_arrives:
   - <field path: "validation[2].parameters">
   - <field path: "endpoints[0].verification.payload_schema">

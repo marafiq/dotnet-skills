@@ -166,32 +166,46 @@ Many MVC 5 apps have one or more global selectors (community, facility, fiscal y
 
 ## Privacy (lint)
 
-Generalize observed data values throughout the artifact — both prose AND YAML values. **Reject** in artifact frontmatter / claims: tenant names, tenant ids, resident names, room numbers, emails, dates of birth, hostnames, any identifier that ties an artifact to a single tenant. **Accept**: generic placeholders (*"the currently-selected community"*, *"a resident on premise"*, *"the user's accessible communities"*).
+Generalize observed data values **everywhere in the artifact** — frontmatter, claims, edge-case prose, AND the verification log. The Senior-Living domain is regulated; resident names, room numbers, dates of birth, medication entries, and tenant names are all PHI / PII. The artifact is a behavioral contract, not a data dump.
 
-Specific values may appear *only* in the `## Verification log` (for human reviewers), and even there preferably redacted.
+**Reject** anywhere in the artifact: tenant names, tenant ids, resident names, room numbers, emails, dates of birth, phone numbers, addresses, medical record numbers, hostnames, any identifier that ties an artifact to a single real tenant or person.
 
-If the running app is a production tenant, ask the user whether they prefer pointing the skill at staging instead.
+**Accept**: generic placeholders (*"the currently-selected community"*, *"a resident on premise"*, *"the user's accessible communities"*) and synthetic test labels (*"Community-A"*, *"Resident-1"*, *"Date-X"*) when a worked example is needed in a tamper scenario or verification log entry.
+
+If the running app is a production tenant, ask the user whether they prefer pointing the skill at staging instead. If only production is available, every value typed into the artifact must be a synthetic label even if the data on screen is real.
 
 ## Required blocks for security-sensitive slices
 
 Two artifact-template blocks are **required** for the slices they apply to:
 
-- **`tenant_boundary`** under `authorization` — required for any slice `scoped_by` a context selector (community / facility / business unit) or whose endpoints carry a tenant id in the route. Captures: context sources + a structured **`tamper_matrix`** with one row per endpoint and required scenarios per endpoint: `route_tenant_mismatch`, `body_tenant_mismatch`, `foreign_key_ownership`, `revoked_grant`, `read_vs_write`. Each scenario carries `status` (unknown / observed / source_confirmed) and `observed_result`. A single prose `tamper_test_evidence` is **not sufficient** — the matrix forces explicit coverage of every cross-tenant attack surface.
-- **`failure_matrix`** at the top level — required for any slice with mutating endpoints (POST / PUT / DELETE, batch toolbars, drag-drop persistence). Each cell is structured as `{ status, behavior, evidence }`, not free prose. Required cells (cannot be silently omitted): `http_4xx`, `http_5xx`, `network_timeout`, `double_click_or_resubmit`, `retry_after_failure`, `partial_success`, `refresh_mid_flight`, `context_switch_mid_edit`, `push_disconnect`, `idempotency_strategy`, `queue_retention`.
+- **`tenant_boundary`** under `authorization` — required when **any** of the following holds: the slice declares `scoped_by` a context selector; its routes contain a tenant placeholder (`{communityId}`, `{facilityId}`); its `business_logic.authorization_filters` mentions a tenant filter; its `business_logic.selection.rules` mention community / facility / tenant; `context_sources` is non-empty; or any reactivity endpoint posts a body field that resolves to a tenant. **Implicit / session-bound tenant context still triggers the requirement** — `/Residents/Profiles/{id}` with community resolved from session is the highest-risk shape and MUST declare `tenant_boundary`. Captures: context sources + a structured **`tamper_matrix`** with one row per endpoint and required scenarios per endpoint: `route_tenant_mismatch`, `body_tenant_mismatch`, `foreign_key_ownership`, `revoked_grant`, `read_vs_write`. A single prose `tamper_test_evidence` is **not sufficient** — the matrix forces explicit coverage of every cross-tenant attack surface.
+- **`failure_matrix`** at the top level — required for any slice with **mutating endpoints**, defined as endpoints whose `mutates_state: true`. This decouples from HTTP method: legacy MVC routinely mutates via GET (e.g. `/Residents/{id}/Deactivate`, link-triggered status changes, queue-pop links). Required cells: `http_4xx`, `http_5xx`, `network_timeout`, `double_click_or_resubmit`, `retry_after_failure`, `partial_success`, `refresh_mid_flight`, `context_switch_mid_edit`, `push_disconnect`, `idempotency_strategy`, `queue_retention`, `concurrency_conflict`, `audit_emission`. Each cell is structured `{ status, behavior, evidence }`, not free prose.
 
 ## Contract-completeness gate
 
-Every artifact carries `contract_status: complete | incomplete` at the frontmatter root. A slice is `complete` only when **every** rule below holds:
+Every artifact carries `contract_status: complete | incomplete` at the frontmatter root. A slice is `complete` only when **every** rule below holds. The gate is mechanical — a fresh LLM session producing artifacts at scale must NOT mark `complete` unless every rule passes structurally.
 
 1. **Endpoints — `method` and `route` verification.** Each endpoint has `verification.method` and `verification.route` at `observed | source_confirmed`. `unknown` is BLOCKING.
-2. **Endpoints — security-sensitive aspects.** For *mutating* endpoints (POST / PUT / DELETE) and *tenant-scoped* endpoints (any endpoint listed in `tenant_boundary.tamper_matrix`), each of `payload_schema`, `error_shape`, `anti_forgery`, `authorization` must be `observed | source_confirmed | n/a`. `observed_partial` is BLOCKING unless an explicit exception is listed in `contract_status_exceptions` with `reason` and `risk_owner`. `unknown` is BLOCKING.
-3. **Failure matrix.** For slices with mutating endpoints, every required cell (`http_4xx`, `http_5xx`, `network_timeout`, `double_click_or_resubmit`, `retry_after_failure`, `partial_success`, `refresh_mid_flight`, `context_switch_mid_edit`, `push_disconnect`, `idempotency_strategy`, `queue_retention`) must be `observed | source_confirmed | n/a`. `unknown` is BLOCKING. The canonical enum is exactly those four values — `observed_partial` and `inferred` are not valid `failure_matrix` statuses; partial knowledge is treated as `unknown` for gating.
-4. **Tenant tamper matrix.** Every tenant-scoped endpoint (referenced by `endpoint_id`) must have a row in `tenant_boundary.tamper_matrix`. For each row, every required scenario (`route_tenant_mismatch`, `body_tenant_mismatch`, `foreign_key_ownership`, `revoked_grant`, `read_vs_write`) must be `observed | source_confirmed | n/a`. Missing rows or `unknown` scenarios are BLOCKING. `n/a` is acceptable when justified in `observed_result`.
+
+2. **Endpoints — security-sensitive aspects.** For **mutating** endpoints (any endpoint with `mutates_state: true`) and **tenant-scoped** endpoints (any endpoint listed in `tenant_boundary.tamper_matrix`), each of `payload_schema`, `error_shape`, `anti_forgery`, `authorization` must be `observed | source_confirmed | n/a`. `observed_partial` is BLOCKING unless an explicit exception is listed in `contract_status_exceptions` with `reason` and `risk_owner`. `unknown` is BLOCKING.
+
+3. **Failure matrix.** For mutating slices (any endpoint with `mutates_state: true`), every required cell (`http_4xx`, `http_5xx`, `network_timeout`, `double_click_or_resubmit`, `retry_after_failure`, `partial_success`, `refresh_mid_flight`, `context_switch_mid_edit`, `push_disconnect`, `idempotency_strategy`, `queue_retention`, `concurrency_conflict`, `audit_emission`) must be `observed | source_confirmed | n/a`. `unknown` is BLOCKING. The canonical enum is exactly those four values — `observed_partial` and `inferred` are not valid `failure_matrix` statuses; partial knowledge is treated as `unknown` for gating.
+
+4. **Tenant tamper matrix.** When tenant_boundary is required (per the trigger conditions above — explicit OR implicit tenant context), every tenant-scoped endpoint (referenced by `endpoint_id`) must have a row in `tenant_boundary.tamper_matrix`. For each row, every required scenario (`route_tenant_mismatch`, `body_tenant_mismatch`, `foreign_key_ownership`, `revoked_grant`, `read_vs_write`) must be `observed | source_confirmed | n/a`. Missing rows or `unknown` scenarios are BLOCKING. `n/a` is acceptable when justified in `observed_result`.
+
 5. **Required content.** `validation[].message`, `business_logic.selection.rules`, and `authorization.action_authorization[].on_denied` must be non-null where the slice has those affordances.
 
-Otherwise: `incomplete`. `contract_status_reason` lists the gating gaps; `contract_status_exceptions` records any structurally-allowed `observed_partial` cases with reason + risk_owner.
+6. **Evidence coherence.** Any cell at `status: observed | source_confirmed` must have non-empty supporting evidence. Specifically: `observed_result` ≠ `"untested" | "unknown" | empty`; `source_refs` ≠ `["unknown"] | empty`; `evidence` ≠ `"untested" | "unknown" | empty`. A green status with placeholder evidence is BLOCKING — this is "status laundering" and the gate explicitly rejects it.
 
-The downstream rewrite session treats `incomplete` artifacts as in-progress contracts — informative for implementation but not sole source-of-truth for production work. A fresh LLM session producing artifacts at scale must **not** mark `contract_status: complete` unless every gate above is structurally satisfied.
+7. **Cross-slice reference resolution.** Every artifact id mentioned under `scoped_by`, `related_controls[].id`, or `signal_sources[].artifact_ref` must resolve to an artifact that exists in the corpus. Unresolved references force `incomplete` unless explicitly listed under `cross_slice_refs_pending` with `reason` (acknowledging the gap, not waiving it). `scoped_by` cycles (A → B → A) are BLOCKING regardless.
+
+8. **Mode B unknowns are gate-aware.** Entries in `unknowns_to_fill_when_source_arrives` that mention endpoint paths, anti-forgery, authorization, tenant_boundary scenarios, business_logic.selection rules, or audit emission FORCE `incomplete`. Mode B is a legitimate working mode but cannot ship `complete` while security or correctness fundamentals are deferred to a future source-arrival.
+
+9. **SignalR / SSE structural coverage.** Every `signal_sources` entry of kind `signalr | sse` must reference a matching `endpoints[].id` via `endpoint_id`, AND that endpoint must have a tamper_matrix row (when the slice is tenant-scoped) AND a non-`unknown` `failure_matrix.push_disconnect` cell. Free-prose `signal_sources` declarations without an endpoint anchor are BLOCKING for tenant-scoped slices — push frames cross tenant boundaries and must be tamper-tested at the hub-method granularity.
+
+Otherwise: `incomplete`. `contract_status_reason` lists the gating gaps; `contract_status_exceptions` records any structurally-allowed `observed_partial` cases with reason + risk_owner; `cross_slice_refs_pending` records unresolved sibling artifact ids with reason.
+
+The downstream rewrite session treats `incomplete` artifacts as in-progress contracts — informative for implementation but not sole source-of-truth for production work.
 
 ## Endpoint identity for cross-references
 
@@ -206,6 +220,8 @@ Stable ids make completeness gates mechanically checkable rather than prose-only
 ## Endpoint verification is per-aspect
 
 URL + method observed in the network is *not* enough to call a mutating endpoint "verified." `endpoints[].verification` carries per-aspect flags: `method`, `route`, `payload_schema`, `response_shape`, `error_shape`, `anti_forgery`, `authorization`. Each is `unknown | observed | observed_partial | source_confirmed | n/a`. Mark only what the evidence supports. An endpoint with method+route observed but payload_schema unknown is **partially verified** — and unless the unknown is acceptable for that endpoint's role, it gates `contract_status` to `incomplete`.
+
+Each endpoint also carries `mutates_state: true | false`. Use `true` whenever the endpoint changes server-side state the user would notice — regardless of HTTP method. Legacy MVC apps frequently mutate via GET (`/Residents/{id}/Deactivate`, link-triggered status changes, queue-pop links). The mutating-endpoint gate fires on `mutates_state: true`, NOT on HTTP method. Marking a state-changing GET as `mutates_state: false` to dodge the failure_matrix requirement is the precise failure mode the gate exists to catch.
 
 ## Extension mechanism
 

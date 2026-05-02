@@ -15,6 +15,10 @@ contract_status_reason: >
   arrives. failure_matrix cells largely unverified.
 contract_status_exceptions: []
 
+# Selector has no related_controls or scoped_by — it IS the scope provider.
+# No cross-slice refs to leave pending.
+cross_slice_refs_pending: []
+
 # Appears on every authenticated page in the app — global header element.
 routes:
   - "*"
@@ -143,6 +147,7 @@ endpoints:
     url: "unknown — fill when source arrives"
     purpose: "Set the current community in the user's session/state and trigger page reload."
     response_kind: "unknown"
+    mutates_state: true   # changes server-side tenant context; the slice IS the scope provider
     verification:
       method:           unknown
       route:            unknown
@@ -267,6 +272,14 @@ failure_matrix:
     status:   n/a
     behavior: "n/a — no client-side queue on this slice. Downstream queues are discarded on switch (see context_switch_mid_edit)."
     evidence: "n/a"
+  concurrency_conflict:
+    status:   n/a
+    behavior: "n/a — selection POST is single-actor scope context, not a record edit. Two devices may set different communities for the same user, but each device's later requests resolve via that device's own session — no shared-record conflict."
+    evidence: "n/a — single-actor session-scoped context."
+  audit_emission:
+    status:   unknown
+    behavior: "Whether community-switch is logged to a per-user audit / activity stream is unknown. In Senior-Living regulated software the boundary-crossing event is reasonable to record for incident response, but the legacy app's behavior here is unverified."
+    evidence: "untested — fill when source arrives; verify by inspecting the Activity panel or any user-facing audit feed for switch entries."
 
 # ──────────────── Mode B helpers ────────────────
 url_conventions_observed:

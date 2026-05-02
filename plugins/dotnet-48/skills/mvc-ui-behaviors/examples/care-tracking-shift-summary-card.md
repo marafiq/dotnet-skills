@@ -8,13 +8,21 @@ control_type: card
 # ──────────────── Contract status ────────────────
 contract_status: incomplete
 contract_status_reason: >
-  Read-only slice scoped by community. Tenant tamper_matrix
-  scenarios untested (route-path tamper to other community,
-  revoked-grant). Endpoint verification still has error_shape
-  and authorization at unknown for the GET. Push-disconnect
-  failure-matrix cell unobserved. Source-fill or testing
-  required before contract-complete.
+  Read-only slice scoped by community (no mutating endpoints — the SignalR
+  push endpoint consumes server-pushed state and the editor_navigation is
+  a read GET). Tenant tamper_matrix scenarios untested across all three
+  endpoints (route-path tamper, revoked-grant, foreign-key ownership for
+  cross-tenant resident ids in URL fragments, read_vs_write). Endpoint
+  verification has error_shape and authorization at unknown for the GET;
+  signalr_stafftaskshub authorization (server-side fan-out tenant
+  filtering) is unverified. Source-fill or testing required before
+  contract-complete.
 contract_status_exceptions: []
+cross_slice_refs_pending:
+  - ref: care-tracking-record-editor
+    referenced_from: "related_controls[0].id"
+    reason: "Per-task editor slice has not yet been authored. Reactivity 'navigate to editor' targets it; tamper_matrix for editor_navigation references its endpoints by route only."
+    expected_to_land: "Next iteration of artifact authoring; the editor is the third Care Tracking slice."
 
 routes:
   - "/Care/Tracking/{communityId}"
@@ -146,6 +154,8 @@ scoped_by:
 signal_sources:
   - kind: signalr
     detail: "Connects to `stafftaskshub` on page load. Receives push frames when any task is recorded for any shift in this community on the selected date."
+    endpoint_id: signalr_stafftaskshub
+    artifact_ref: null   # this slice owns the connection; the toolbar consumes via its own signal_sources entry
 
 on_close: null
 
@@ -156,6 +166,7 @@ endpoints:
     url: "/Care/Tracking/{communityId}"
     purpose: "Return the shift summary cards for the community on the selected date."
     response_kind: html_full
+    mutates_state: false
     verification:
       method:           observed
       route:            observed
@@ -170,6 +181,7 @@ endpoints:
     url: "/Care/Tracking/{communityId}/Record/{date}/List/{shiftId}"
     purpose: "Navigate into the per-task editor for a specific shift on a specific date."
     response_kind: html_full
+    mutates_state: false   # navigation only; the editor's POST is documented in care-tracking-record-toolbar
     verification:
       method:           observed
       route:            observed
@@ -180,10 +192,11 @@ endpoints:
       authorization:    unknown
 
   - id: signalr_stafftaskshub
-    method: "SignalR"
+    method: "n/a — SignalR hub method (not HTTP)"
     url: "stafftaskshub"
     purpose: "Receive push notifications when any task is recorded; updates the tasks_recorded counter in real time."
-    response_kind: json
+    response_kind: "n/a — push frame, not request/response"
+    mutates_state: false   # consumes pushed state; doesn't write
     verification:
       method:           observed
       route:            observed

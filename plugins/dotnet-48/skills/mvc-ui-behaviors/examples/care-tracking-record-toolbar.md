@@ -11,17 +11,24 @@ contract_status_reason: >
   Mutating slice with required failure_matrix cells at status: unknown
   (http_4xx, http_5xx, network_timeout, double_click_or_resubmit,
   retry_after_failure, partial_success, push_disconnect,
-  idempotency_strategy, queue_retention on failure). Tenant
-  tamper_matrix scenarios untested across all three endpoints (route,
-  body, foreign-key ownership, revoked_grant, read_vs_write).
-  Endpoint verification has payload_schema, error_shape, anti_forgery,
-  authorization at unknown for the mutating POST. Source-fill or
-  testing required before this slice is contract-complete.
+  idempotency_strategy, queue_retention on failure, concurrency_conflict,
+  audit_emission). Tenant tamper_matrix scenarios untested across all
+  four endpoints (record_care_post, record_prn_navigation, print_button,
+  stafftaskshub_push) for route, body, foreign-key ownership,
+  revoked_grant, read_vs_write. Endpoint verification has payload_schema,
+  error_shape, anti_forgery, authorization at unknown for the mutating
+  POST. SignalR push endpoint stafftaskshub_push has authorization
+  unknown — cross-tenant fan-out behavior is the highest-risk gap.
+  Source-fill or testing required before this slice is contract-complete.
 
 # Optional exception block — empty here because we are not claiming
 # observed_partial as acceptable for any aspect; everything that's
 # partial is rolled forward as the work that gates `complete`.
 contract_status_exceptions: []
+
+# No unresolved cross-slice refs pending — care-tracking-shift-summary-card
+# and dashboard-community-selector both exist in the corpus.
+cross_slice_refs_pending: []
 
 routes:
   - "/Care/Tracking/{communityId}/Record/{date}/List/{shiftId}"
@@ -155,6 +162,8 @@ scoped_by:
 signal_sources:
   - kind: signalr
     detail: "After a successful POST, server fan-out via `stafftaskshub` updates the X-of-Y counter both here AND on the summary card. Hub method name + frame schema — unknown — fill when source arrives."
+    endpoint_id: stafftaskshub_push   # see endpoints[]; gate requires this anchor for tenant-scoped slices
+    artifact_ref: care-tracking-shift-summary-card  # the source slice that owns the hub connection
 
 on_close: null
 
@@ -165,6 +174,7 @@ endpoints:
     url: "/Care/Tracking/{communityId}/Record/{date}"
     purpose: "Commit queued task records for the shift on the given date."
     response_kind: json
+    mutates_state: true   # writes care records; the central mutating endpoint of this slice
     verification:
       method:           observed       # POST observed in network during commit
       route:            observed       # URL captured
@@ -179,6 +189,7 @@ endpoints:
     url: "/Care/Tracking/{communityId}/RecordPrn/{date}/{shiftId}"
     purpose: "Navigate to the PRN-care recording editor (separate flow)."
     response_kind: html_full
+    mutates_state: false   # navigation to an editor view; the editor's POST is documented in the editor slice
     verification:
       method:           observed       # link href captured
       route:            observed_partial   # pattern guessed; navigation not exercised
@@ -193,6 +204,7 @@ endpoints:
     url: "unknown — Print button target"
     purpose: "Print or export the current shift's task list."
     response_kind: "unknown"
+    mutates_state: false   # presumed read; unknown until verified — flag in unknowns_to_fill if it turns out to mutate (e.g. logs a print event)
     verification:
       method:           unknown
       route:            unknown
@@ -201,6 +213,21 @@ endpoints:
       error_shape:      unknown
       anti_forgery:     unknown
       authorization:    unknown
+
+  - id: stafftaskshub_push
+    method: "n/a — SignalR hub method (not HTTP)"
+    url: "stafftaskshub.<MethodName> — exact method name unknown"
+    purpose: "Server-pushed counter update after Record Care commits. Frame is consumed by both this toolbar and the summary card."
+    response_kind: "n/a — push frame, not request/response"
+    mutates_state: false   # consumes pushed state; doesn't write
+    verification:
+      method:           observed_partial   # SignalR frames observed; specific method name not confirmed
+      route:            observed_partial   # hub URL observed; method name unknown
+      payload_schema:   unknown            # frame body shape not confirmed
+      response_shape:   n/a
+      error_shape:      unknown            # disconnect handling unverified
+      anti_forgery:     n/a                # SignalR connection-token bound, not anti-forgery
+      authorization:    unknown            # whether tenant-filtered server-side at fan-out time is unverified
 
 # ──────────────── Authorization ────────────────
 authorization:
@@ -354,6 +381,53 @@ authorization:
             source_refs: ["unknown"]
             status: unknown
 
+      - endpoint_id: stafftaskshub_push
+        scenarios:
+          - kind: route_tenant_mismatch
+            baseline_context: "Subscriber connected via SignalR for community A."
+            tampered_input: "n/a — SignalR has no per-frame URL/route to tamper. Equivalent test: connect a second tab as user with grant for community B and confirm that A's commits do NOT push frames into B's connection."
+            expected_status: "no cross-tenant frame delivery"
+            expected_shape: n/a
+            observed_result: "untested"
+            source_refs: ["unknown"]
+            status: unknown
+
+          - kind: body_tenant_mismatch
+            baseline_context: "Frames are server-pushed; clients cannot tamper the body. Risk is server-side fan-out leaking frames to wrong group."
+            tampered_input: "n/a — server-controlled. Equivalent test: subscribe with two simultaneous browser sessions for different communities; verify hub group membership is by tenant scope, not user-only."
+            expected_status: "frames scoped to tenant group"
+            expected_shape: n/a
+            observed_result: "untested"
+            source_refs: ["unknown"]
+            status: unknown
+
+          - kind: foreign_key_ownership
+            baseline_context: "Each pushed frame references resident_id and task_id."
+            tampered_input: "n/a from the client. Equivalent test: confirm that frame content does NOT include cross-tenant resident_ids when fan-out routes by community group."
+            expected_status: "no foreign-tenant ids leaked into frames"
+            expected_shape: n/a
+            observed_result: "untested"
+            source_refs: ["unknown"]
+            status: unknown
+
+          - kind: revoked_grant
+            baseline_context: "Subscriber connected; admin revokes grant for community A."
+            tampered_input: "Without re-subscribing, observe whether the existing SignalR connection continues to receive frames after the grant is revoked."
+            expected_status: "deny / disconnect after revocation"
+            expected_shape: n/a
+            observed_result: "untested — known SignalR risk: long-lived connections can outlive permission changes"
+            source_refs: ["unknown"]
+            status: unknown
+
+          - kind: read_vs_write
+            baseline_context: "Push is read-only from the client perspective."
+            tampered_input: "Confirm that hub method invocations from the client (if any are exposed) cannot be used to inject frames or trigger writes outside the user's tenant scope."
+            expected_status: "deny on any tampered hub-method invocation"
+            expected_shape: n/a
+            observed_result: "untested"
+            source_refs: ["unknown"]
+            status: unknown
+
 # ──────────────── Failure matrix ────────────────
 # Mutating slice — failure_matrix is REQUIRED. Each cell carries
 # status + behavior + evidence. Cells at status: unknown for required
@@ -403,6 +477,14 @@ failure_matrix:
     status:   unknown
     behavior: "On success: queue cleared (observed during exploration). On failure: behavior unknown — failure path is the gating concern. On context switch: queue cleared without prompt (observed)."
     evidence: "Success path observed; failure path untested. Required cell for mutating slices — must be exercised by forcing a 5xx and observing whether the queue clears or persists for retry."
+  concurrency_conflict:
+    status:   unknown
+    behavior: "Two staff members open the same shift on different devices and each commit a partially-overlapping queue. Last-write-wins assumed (legacy MVC default); whether the second writer sees a 409 or silently overwrites the first writer's records is unverified. Senior-Living domain risk: lost care entries are clinically significant."
+    evidence: "untested — must exercise by opening the same shift in two browser sessions, queue records on both, commit one, then commit the other; confirm whether the second commit displaces or merges."
+  audit_emission:
+    status:   unknown
+    behavior: "Each committed task record presumably writes a row visible in the resident's Activity / Care history pane (with actor, timestamp, before/after care state). Whether the audit row is created in the same transaction as the care write, and whether the user sees the audit entry without a refresh, are both unverified."
+    evidence: "untested — must exercise by recording a task and inspecting the Activity panel for a corresponding entry tied to the actor + the moment of commit."
 
 # ──────────────── Mode B helpers ────────────────
 url_conventions_observed:
