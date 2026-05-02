@@ -36,21 +36,21 @@ business_logic:
       code_ref: "unknown"
 
   computed_fields:
-    - name: "queue_count"
+    - name: queue_count
       derivation: "Client-side: count of per-row actions (Completed / Not Completed) that have local state but haven't been committed. Reset to 0 on successful POST."
       code_ref: "unknown — likely a JS handler attached to per-row buttons"
 
-  ordering: null    # toolbar has no listing
+  ordering: null
   paging: null
   soft_delete: null
   temporal_scoping: "Bound to the {date} segment in the URL (the shift's date)."
 
   user_visible_side_effects:
-    - kind: "audit_entry"
+    - kind: audit_entry
       description: "Each task recorded likely writes an audit entry. Whether visible elsewhere is unknown."
       code_ref: "unknown"
-    - kind: "signalr_push"
-      description: "POST returns 200 → server emits SignalR push on `stafftaskshub` → summary card counter on /Care/Tracking/{communityId} and any in-page progress indicators advance within ~1–3 s."
+    - kind: signalr_push
+      description: "POST returns 200 → server emits SignalR push on `stafftaskshub` → summary card counter and any in-page progress indicators advance within ~1–3 s."
       code_ref: "unknown — fill when source arrives"
 
 # ──────────────── Configuration ────────────────
@@ -58,24 +58,24 @@ configuration:
   required_indicator_convention: null
   presence_condition: null
   states:
-    - "queue_empty"          # button disabled-grey, no count
-    - "queue_pending"        # button active blue/green, shows '(N)' suffix
-    - "submitting"           # POST in flight (transient)
-    - "post_success"         # toast shown, button reverts to queue_empty
+    - queue_empty            # button disabled-grey, no count
+    - queue_pending          # button active blue/green, shows '(N)' suffix
+    - submitting             # POST in flight (transient)
+    - post_success           # toast shown, button reverts to queue_empty
 
   buttons:
-    - id: "record_prn_care"
+    - id: record_prn_care
       label: "Record PRN Care"
-      role: "navigate"
-      target: "/Care/Tracking/{communityId}/RecordPrn/{date}/{shiftId}"  # observed pattern; URL form unverified
-    - id: "print"
+      role: navigate
+      target: "/Care/Tracking/{communityId}/RecordPrn/{date}/{shiftId}"   # observed pattern; unverified
+    - id: print
       label: "Print"
-      role: "export"
+      role: export
       target: "unknown — fill when source arrives (likely opens browser print dialog or downloads PDF)"
-    - id: "record_care"
+    - id: record_care
       label: "Record Care"
       label_template: "Record Care ({queue_count})"   # when queue is non-empty
-      role: "commit_batch"
+      role: commit_batch
       enabled_when: "queue_count > 0"
 
   empty_state: "When no tasks are queued, the Record Care button is disabled-grey with no count suffix. Counter still shows the persistent X of Y recorded."
@@ -85,38 +85,38 @@ validation: []
 
 # ──────────────── Reactivity ────────────────
 reactivity:
-  - event: "queue_changed (from per-task row Completed/Not Completed click)"
+  - event: queue_changed
     targets: [self]
-    action: "visual_state_change"
+    action: visual_state_change
     endpoint: null
     settle_ms: 0
     immediate_response: "Record Care button state recomputed from queue_count: enabled blue/green when > 0, label appends '({queue_count})'; disabled grey when 0. No network."
     final_response: "Same as immediate."
 
-  - event: "click (Record Care, when queue_count > 0)"
+  - event: click
     targets: [self, "care-tracking-shift-summary-card", "global-toast-region"]
-    action: "submit"
+    action: commit_batch
     endpoint:
       method: POST
       url: "/Care/Tracking/{communityId}/Record/{date}"
-      request_payload: "JSON: list of queued task records (resident id + task id + Completed/NotCompleted + minutes_taken + optional notes). Exact schema — unknown — fill when source arrives."
-      response_handling: "On 200: success toast emitted top-right ('Successfully recorded N outcomes' — observed for N=1; plural-form unverified). Local queue cleared; button reverts to queue_empty state."
+      request_payload: "JSON list of queued task records (resident id + task id + Completed/NotCompleted + minutes_taken + optional notes). Exact schema — unknown — fill when source arrives."
+      response_handling: "On 200: success toast emitted top-right ('Successfully recorded N outcomes' — observed for N=1; plural form unverified). Local queue cleared; button reverts to queue_empty state."
     settle_ms: 2500
     immediate_response: "Toast appears; button reverts; counter does NOT update synchronously."
     final_response: "Within ~1–3 s of the POST response, SignalR push from `stafftaskshub` advances the X-of-Y counter here AND on the summary card."
 
-  - event: "click (Record PRN Care)"
-    targets: ["care-tracking-record-prn-editor (separate slice — navigation)"]
+  - event: click
+    targets: ["care-tracking-record-prn-editor"]
     action: navigate
     endpoint:
       method: GET
-      url: "/Care/Tracking/{communityId}/RecordPrn/{date}/{shiftId}"  # pattern unverified
+      url: "/Care/Tracking/{communityId}/RecordPrn/{date}/{shiftId}"   # pattern unverified
     settle_ms: null
     immediate_response: "Full-page navigation."
 
-  - event: "click (Print)"
+  - event: click
     targets: []
-    action: "export"
+    action: export
     endpoint:
       method: "unknown"
       url: "unknown — fill when source arrives"
@@ -125,18 +125,18 @@ reactivity:
 # ──────────────── Cross-slice ────────────────
 related_controls:
   - id: care-tracking-shift-summary-card
-    relation: sibling           # same feature; coupled via SignalR push (not direct DOM)
+    relation: sibling
   - id: dashboard-community-selector
     relation: scope_provider
   - id: global-toast-region
-    relation: target            # this slice emits toasts to the global region
+    relation: target
 
 scoped_by:
   - dashboard-community-selector
 
 signal_sources:
   - kind: signalr
-    detail: "After a successful POST, server fan-out via `stafftaskshub` updates the X-of-Y counter both here (in-page) and on the summary card (cross-page persistence). Hub method name + frame schema — unknown — fill when source arrives."
+    detail: "After a successful POST, server fan-out via `stafftaskshub` updates the X-of-Y counter both here AND on the summary card. Hub method name + frame schema — unknown — fill when source arrives."
 
 on_close: null
 
@@ -145,51 +145,110 @@ endpoints:
   - method: POST
     url: "/Care/Tracking/{communityId}/Record/{date}"
     purpose: "Commit queued task records for the shift on the given date."
-    requires_anti_forgery: "unknown — fill when source arrives"
-    response_kind: "json (returns success status; advancement of the counter comes via SignalR, not the response body)"
-    unverified: false           # endpoint URL + method observed in network during commit
+    response_kind: json
+    verification:
+      method:           observed       # POST observed in network during commit
+      route:            observed       # URL captured
+      payload_schema:   unknown        # request body schema not source-confirmed
+      response_shape:   observed_partial   # 200 with brief JSON observed; full schema unknown
+      error_shape:      unknown        # no failure path exercised
+      anti_forgery:     unknown        # presence of __RequestVerificationToken not confirmed
+      authorization:    unknown        # permission rule for the action not source-confirmed
 
   - method: GET
     url: "/Care/Tracking/{communityId}/RecordPrn/{date}/{shiftId}"
     purpose: "Navigate to the PRN-care recording editor (separate flow)."
-    requires_anti_forgery: false
     response_kind: html_full
-    unverified: true              # URL pattern guessed from the link; navigation not exercised
+    verification:
+      method:           observed       # link href captured
+      route:            observed_partial   # pattern guessed; navigation not exercised
+      payload_schema:   n/a
+      response_shape:   unknown
+      error_shape:      unknown
+      anti_forgery:     n/a
+      authorization:    unknown
 
   - method: "unknown"
     url: "unknown — Print button target"
     purpose: "Print or export the current shift's task list."
     response_kind: "unknown"
-    unverified: true
+    verification:
+      method:           unknown
+      route:            unknown
+      payload_schema:   unknown
+      response_shape:   unknown
+      error_shape:      unknown
+      anti_forgery:     unknown
+      authorization:    unknown
 
 # ──────────────── Authorization ────────────────
 authorization:
   presence_condition: "User must have permission to view Care Tracking for this community + shift. The toolbar is visible whenever the editor is reachable."
   action_authorization:
-    - action: "commit_batch"
+    - action: commit_batch
       requires: "unknown — fill when source arrives (likely a CarePlan write permission)"
       on_denied:
-        response_kind: "unknown"
-        user_sees: "unknown — likely the legacy generic-error toast pattern (HTML 403 → unparseable AJAX → 'ERROR / error' fallback; observed elsewhere in this app on +Incident click). Verify when an unauthorized user is available."
-        legacy_quirk: "Generic toast on unparseable HTML 403 response — see action_authorization.on_denied across the app."
-        rewrite_intent: "improve"
+        response_kind: html_full
+        user_sees: "unknown — likely the legacy generic-error toast pattern (HTML 403 → unparseable AJAX → 'ERROR / error' fallback; observed elsewhere on +Incident click). Verify when an unauthorized user is available."
+        legacy_quirk: "Generic toast on unparseable HTML 403 response."
+        rewrite_intent: improve
+
   re_auth_required: false
+
+  tenant_boundary:
+    context_sources:
+      - "url_path: /Care/Tracking/{communityId}/Record/{date}/List/{shiftId}"
+      - "session: CurrentCommunityId (assumed; legacy MVC default — verify when source arrives)"
+    validation_rule: "URL-path communityId must match session-bound CurrentCommunityId AND user must have a community grant. POST {communityId} must match the URL the user navigated to."
+    mismatch_behavior: "Likely 403 / Unauthorized HTML page from server; AJAX falls through to generic error toast (observed pattern)."
+    denied_response: html_full
+    revocation_behavior: "If user grant revoked mid-edit, next POST fails — queue retention behavior unverified."
+    tamper_test_evidence: "unverified — must exercise: (a) tampered URL communityId, (b) tampered POST body communityId differing from URL, (c) tampered POST body resident_id belonging to another community"
+
+# ──────────────── Failure matrix ────────────────
+# This slice is mutating — failure_matrix is REQUIRED.
+# Many cells remain unverified; that's acceptable in Mode B but they
+# cannot be silently omitted. The rewrite must answer each before contract-complete.
+failure_matrix:
+  http_4xx:                  "Unverified. 403 likely yields the generic-error toast (legacy quirk). 422 (validation) — unknown response shape. Worth flagging for rewrite to return ProblemDetails JSON."
+  http_5xx:                  "Unverified. Likely a generic ASP.NET error rendered into the toast slot or a full-page YSOD."
+  network_timeout:           "Unverified. Client likely shows a generic error or no feedback. **Real risk**: user re-clicks → potential duplicate POST without idempotency."
+  double_click_or_resubmit:  "Unverified. No client-side debounce observed. **Real risk**: a fast double-click could submit the queue twice. Idempotency strategy unknown — see below."
+  retry_after_failure:       "Unverified. Queue retention on failure is unclear — does the queue stay populated so the user can re-click? Or is it cleared regardless?"
+  partial_success:           "Unverified. If 3 of 5 batch items succeed and 2 fail, what does the user see? Are the 2 retained in the queue? Toast may show ambiguous count."
+  refresh_mid_flight:        "Unverified. POST may complete server-side; SignalR push still advances counters; client never sees the response. Outcome from user's perspective: action succeeded silently. Acceptable but worth confirming."
+  context_switch_mid_edit:   "Switching the community selector while the queue has items silently discards the queue (observed in dashboard-community-selector edge cases). **Real concern.**"
+  push_disconnect:           "If SignalR drops during the 1–3 s settle window, the counter advancement may be missed entirely. The POST itself succeeds; only the live UI feedback is lost. Refresh recovers."
+  idempotency_strategy:      "unknown — natural_idempotent (servers may dedupe by resident_id+task_id+date), client_dedupe_token (unobserved), or none. **Critical to confirm before rewrite.**"
+  queue_retention:           "Cleared on success (observed). On failure: unknown — fill when source or test data is available."
 
 # ──────────────── Mode B helpers ────────────────
 url_conventions_observed:
   - "/Care/Tracking/{communityId}/Record/{date} → POST endpoint to commit batch task records (verb-on-noun; date in path)"
-  - "/Care/Tracking/{communityId}/Record/{date}/List/{shiftId} → editor view URL (List/{shiftId} suffix — pattern observed elsewhere as discriminator for the visible list)"
+  - "/Care/Tracking/{communityId}/Record/{date}/List/{shiftId} → editor view URL (List/{shiftId} suffix as discriminator for the visible list)"
   - "/Care/Tracking/{communityId}/RecordPrn/{date}/{shiftId} → PRN navigation (pattern guessed; unverified)"
 
 unknowns_to_fill_when_source_arrives:
   - "view: which Razor view file renders this toolbar?"
-  - "controller action that returns the editor view (likely a CareTrackingController action)"
-  - "POST request payload schema (currently described prose-only)"
+  - "controller action that returns the editor view"
+  - "POST request payload schema"
+  - "POST response shape on success and on each failure class"
   - "anti-forgery requirement on POST /Record/{date}"
   - "Print button's destination — print dialog vs PDF download vs new tab"
   - "PRN navigation URL exact form"
   - "stafftaskshub method name + payload schema for task-recorded push"
-  - "Permission requirement to commit (currently inferred only)"
+  - "Permission requirement to commit"
+  - "Idempotency strategy on POST"
+  - "Queue retention behavior on failure"
+  - "All `failure_matrix` cells currently marked 'Unverified' must be confirmed"
+  - "tenant_boundary.tamper_test_evidence — exercise tamper scenarios"
+
+extensions:
+  - "event: queue_changed — sanctioned addition (custom event for client-side state mutation)"
+  - "action: commit_batch — sanctioned"
+  - "action: visual_state_change — sanctioned"
+  - "action: navigate — sanctioned"
+  - "action: export — sanctioned"
 ---
 
 # Care Tracking — Record Care commit toolbar
@@ -200,21 +259,20 @@ The toolbar at the top of the per-task editor (`/Care/Tracking/{communityId}/Rec
 
 ## Code references
 
-(For human reviewers cross-checking the artifact.)
-
 - View: unknown — fill when source arrives.
-- Controller action that handles `POST /Care/Tracking/{communityId}/Record/{date}`: unknown — fill when source arrives.
+- Controller action handling `POST /Care/Tracking/{communityId}/Record/{date}`: unknown.
 - SignalR Hub: `stafftaskshub` (negotiate URL observed; method name unknown).
-- Client-side queue logic for per-row Completed / Not-Completed clicks: unknown — fill when source arrives (likely a JS handler bundled with the editor view).
+- Client-side queue logic for per-row Completed / Not-Completed clicks: unknown — likely a JS handler bundled with the editor view.
 
 ## Edge cases
 
 - **Empty queue** — button disabled-grey, no count suffix, no POST possible.
-- **POST failure (network or server error)** — behavior unverified. Likely shows an error toast; queue may or may not retain its state. Worth verifying.
-- **Concurrent commit by another user** — both users' POSTs succeed independently; their respective summary-card counters advance via SignalR. Race condition unlikely but un-verified.
-- **Stale community / date** — switching the global community selector reloads the page; queue is lost. Not explicitly tested.
-- **Permission denied for commit** — likely the same legacy generic-error-toast pattern observed on `+ Incident` (HTML 403 response that AJAX can't parse → falls back to generic toast). Rewrite intent: improve to actionable message.
-- **Browser refresh mid-commit** — POST may complete but client never gets the response; SignalR push still advances counters, so the next page load sees the post-commit state. Outcome from the user's perspective: action succeeded silently. Verifiable; not tested.
+- **POST failure (network or server error)** — behavior unverified. The `failure_matrix` enumerates each class; all currently `unverified` and must be exercised.
+- **Concurrent commit by another user** — both users' POSTs succeed independently; their respective summary-card counters advance via SignalR.
+- **Stale community / date** — switching the global community selector reloads the page; queue is lost without confirmation. Worth flagging in `rewrite_intent`.
+- **Permission denied for commit** — likely the legacy generic-error-toast pattern. `rewrite_intent: improve` to actionable message.
+- **Browser refresh mid-commit** — POST may complete server-side but client never gets the response; SignalR push still advances counters, so next page load sees post-commit state.
+- **URL / payload tampering** — sending a POST body with `communityId` or `resident_id` belonging to a different community than the URL suggests must be rejected at the server. Untested; **flag as required tamper test before contract-complete.**
 
 ## Verification claims
 
@@ -223,17 +281,20 @@ The toolbar at the top of the per-task editor (`/Care/Tracking/{communityId}/Rec
 3. **Commit POST** — clicking `Record Care` with `queue_count > 0` fires `POST /Care/Tracking/{communityId}/Record/{date}` with a JSON payload representing the queued actions.
 4. **Success toast** — on POST 200, a top-right toast appears with text matching *"Successfully recorded N outcomes"* (observed N=1; plural form unverified).
 5. **Queue clears on success** — after the POST 200, the button reverts to disabled-grey and any per-row Reset link disappears.
-6. **Counter advances via SignalR (settle window 1–3 s)** — within 1–3 s of the POST response, the X-of-Y counter advances by `queue_count` (verified for N=1: counter went from "0 of 4" to "1 of 4").
-7. **Cross-slice signal to summary card** — same SignalR push advances the counter on `care-tracking-shift-summary-card` at `/Care/Tracking/{communityId}`. Verified by navigating to summary after commit; counter persisted as "1 of 4".
+6. **Counter advances via SignalR (settle window 1–3 s)** — within 1–3 s of the POST response, the X-of-Y counter advances by `queue_count` (verified for N=1).
+7. **Cross-slice signal to summary card** — same SignalR push advances the counter on `care-tracking-shift-summary-card` at `/Care/Tracking/{communityId}`. Verified by navigating to summary after commit.
 8. **PRN navigation** — clicking `Record PRN Care` navigates to a separate PRN editor URL (exact pattern unverified).
+9. **Tamper boundary on POST** — submitting a POST body whose `communityId` differs from the URL communityId should yield 403 / failure; not silent success on the wrong community. **Untested — required before contract-complete.**
+10. **Idempotency on double-click** — fast-clicking `Record Care` twice in succession should not submit the queue twice. Strategy (client debounce, server dedupe, or none) and observable behavior must be confirmed. **Untested — required.**
 
 ## Verification log
 
-- 2026-05-02 — initial Mode-B artifact drafted from browser observation. Claims 2, 3, 4, 5, 6, 7 verified during exploration. Claim 1 verified by initial-load observation. Claim 8 inferred from link presence; navigation not exercised.
+- 2026-05-02 — initial Mode-B artifact drafted from browser observation. Claims 1–7 verified during exploration. Claim 8 inferred from link presence.
+- 2026-05-02 — Codex review: redacted any tenant-specific values; replaced coarse `unverified: false` with per-aspect `verification` (revealed POST is observed-only, not source-confirmed); added required `tenant_boundary` and `failure_matrix` blocks with multiple Unverified cells flagged for source-fill or testing; added claims 9 (tamper boundary) and 10 (idempotency) — both required before this slice is contract-complete.
 
 ## Linked artifacts in this feature
 
 - [`care-tracking-shift-summary-card.md`](care-tracking-shift-summary-card.md) — sibling slice on `/Care/Tracking/{communityId}`. Receives the same SignalR push that advances this slice's counter.
+- [`dashboard-community-selector.md`](dashboard-community-selector.md) — `scope_provider` for this slice.
 - (Future) `care-tracking-per-task-row.md` — child slice; the per-row Completed / Not-Completed forms feeding this toolbar's queue.
-- (Future) `care-tracking-filter-bar.md` — sibling slice on the editor view (Residents / Care Items / Room / Product Type filters).
-- (Future) `dashboard-community-selector.md` — `scope_provider` for every Care Tracking slice.
+- (Future) `care-tracking-filter-bar.md` — sibling slice on the editor view.

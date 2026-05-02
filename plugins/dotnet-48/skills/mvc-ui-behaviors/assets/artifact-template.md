@@ -247,10 +247,20 @@ validation:
     visible_state: <prose: "pink background, red border, message below field">
 
 # ──────────────── Reactivity ────────────────
+# Sanctioned event values: change | click | focus | blur | submit | load |
+#   row_click | row_expand | server_push | toolbar_commit | type | select |
+#   open_dropdown | dismiss | advance_step | scope_change | external_signal
+# Sanctioned action values: reload | hide | show | enable | disable | submit |
+#   navigate | replace_partial | open_modal | open_drawer | open_dropdown |
+#   dismiss | advance_step | switch_tab | queue | commit_batch |
+#   visual_state_change | emit_toast | filter_options | scope_change | export
+# When the slice surfaces a behavior whose event/action isn't in the sanctioned
+# list, use a kebab-case custom value AND mention it in `extensions:` at the
+# bottom of the frontmatter so future schema versions can absorb it.
 reactivity:
-  - event: <change | click | focus | blur | submit | load | row_click | row_expand | server_push | toolbar_commit | …>
+  - event: <one of the sanctioned values, or kebab-case custom>
     targets: [<related slice ids>]
-    action: <reload | hide | show | enable | disable | submit | navigate | replace_partial | open_modal | open_drawer | dismiss | advance_step | switch_tab | queue | commit_batch | visual_state_change | emit_toast>
+    action: <one of the sanctioned values, or kebab-case custom>
     endpoint:
       method: <GET | POST | PUT | DELETE | null>
       url: <route path | null>
@@ -262,9 +272,11 @@ reactivity:
     requires_selection: <true | false | null>       # for grid bulk actions
 
 # ──────────────── Cross-slice ────────────────
+# Sanctioned relation values: parent | child | sibling | trigger | target |
+#   scope_provider | scope_consumer
 related_controls:
   - id: <slice-id>
-    relation: <parent | child | sibling | trigger | target>
+    relation: <one of the sanctioned values, or kebab-case custom>
 
 # Which context selector(s) this slice's data is scoped by
 scoped_by: [<context-slice-id>] | null
@@ -282,21 +294,67 @@ on_close:
   unsaved_changes: <prose: "discard silently" | "prompt confirm" | "auto-save">
 
 # ──────────────── Endpoints ────────────────
+# Per-aspect verification. URL+method observed in the network is NOT enough
+# to call an endpoint "verified" — especially for mutating writes. Each
+# aspect carries its own confirmation state. An overall "verified" status
+# requires every relevant aspect to be source-confirmed (or explicitly
+# marked not-applicable for read-only endpoints).
 endpoints:
   - method: <GET | POST | PUT | DELETE>
     url: <route path>
     purpose: <prose>
-    requires_anti_forgery: <true | false | "unknown — fill when source arrives">
     response_kind: <html_full | html_partial | json | json_problem_details | redirect>
-    unverified: <true | false>                      # set true in Mode B until source confirms
+    verification:
+      method:           <observed | source_confirmed>
+      route:            <observed | source_confirmed>
+      payload_schema:   <unknown | observed_partial | source_confirmed>
+      response_shape:   <unknown | observed_partial | source_confirmed>
+      error_shape:      <unknown | observed_partial | source_confirmed>
+      anti_forgery:     <unknown | observed | source_confirmed>
+      authorization:    <unknown | observed | source_confirmed>
+    # For mutating endpoints (POST/PUT/DELETE), the failure_matrix below
+    # MUST be populated before the endpoint is treated as contract-complete.
 
 # ──────────────── Authorization ────────────────
 authorization:
   presence_condition: <prose: "user is in role 'Admin'" | null>
   action_authorization:
-    - { action: <slug>, requires: <prose> }
+    - action: <slug>
+      requires: <prose>
+      on_denied:
+        response_kind: <html_full | json_problem_details | redirect | n/a>
+        user_sees: <prose: what the user observes>
+        legacy_quirk: <prose | null>
+        rewrite_intent: <preserve | improve | drop | unspecified>
   re_auth_required: <true | false>
   re_auth_for: [<action slugs>]
+
+  # ── Tenant boundary (REQUIRED for any slice scoped_by a context selector
+  #    or whose endpoints carry a tenant id in the route)
+  tenant_boundary:
+    context_sources: [<e.g. "url_path: /Care/Tracking/{communityId}", "session: CurrentCommunityId", "cookie: alis_community", "claim: tenant_id">]
+    validation_rule: <prose: "URL communityId must match session-bound CurrentCommunityId; mismatch → 403">
+    mismatch_behavior: <prose: "what the user sees if URL tenant ≠ session tenant">
+    denied_response: <html_full | json_problem_details | redirect>
+    revocation_behavior: <prose: "what happens if user's grant is revoked mid-session">
+    tamper_test_evidence: <prose: how this was verified, or "unverified — fill when source arrives">
+
+# ──────────────── Failure matrix (REQUIRED for any slice with mutating endpoints) ────────────────
+# Mutating slices (commit toolbars, form submits, batch operations, drag-drop
+# persistence) must answer each cell. Leaving cells "unknown" is acceptable in
+# Mode B, but they cannot be silently omitted.
+failure_matrix:
+  http_4xx:                  <prose: how the user sees a 400/403/422 response>
+  http_5xx:                  <prose: how the user sees a 500>
+  network_timeout:           <prose: client-side handling, retry, message shown>
+  double_click_or_resubmit:  <prose: idempotency — does a second click queue, replay, or no-op?>
+  retry_after_failure:       <prose: explicit retry path, automatic retry, or none>
+  partial_success:           <prose: what if 3 of 5 batch items save, 2 fail>
+  refresh_mid_flight:        <prose: client refreshes browser before response arrives>
+  context_switch_mid_edit:   <prose: user changes community/date while local queue has data>
+  push_disconnect:           <prose: SignalR connection drops mid-flight; does counter stay stale?>
+  idempotency_strategy:      <none | client_dedupe_token | server_idempotency_key | natural_idempotent>
+  queue_retention:           <prose: client queue cleared on success only? on submit attempt? per-row immediately?>
 
 # ──────────────── Mode B helpers ────────────────
 url_conventions_observed: [<prose: "/{controller}/{action}/{id}/Pane → drawer partial", …>]

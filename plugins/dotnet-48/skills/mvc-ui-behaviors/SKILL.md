@@ -145,11 +145,30 @@ Stop when every claim is **verified** or has been explicitly reframed as *a requ
 
 Many MVC 5 apps have one or more global selectors (community, facility, fiscal year, locale) that scope every other slice. Treat the selector as a slice; in every dependent artifact, set `scoped_by: <context-slice-id>`. See [`references/cross-slice-context.md`](references/cross-slice-context.md) for propagation modes.
 
-## Privacy
+## Privacy (lint)
 
-In artifact prose, generalize observed data values: *"the currently-selected resident"* not *"Bond, James Jim"*. Specific values, when needed, go only in the verification log (for human reviewers) — never in the artifact's behavioral claims.
+Generalize observed data values throughout the artifact — both prose AND YAML values. **Reject** in artifact frontmatter / claims: tenant names, tenant ids, resident names, room numbers, emails, dates of birth, hostnames, any identifier that ties an artifact to a single tenant. **Accept**: generic placeholders (*"the currently-selected community"*, *"a resident on premise"*, *"the user's accessible communities"*).
+
+Specific values may appear *only* in the `## Verification log` (for human reviewers), and even there preferably redacted.
 
 If the running app is a production tenant, ask the user whether they prefer pointing the skill at staging instead.
+
+## Required blocks for security-sensitive slices
+
+Two artifact-template blocks are **required** for the slices they apply to:
+
+- **`tenant_boundary`** under `authorization` — required for any slice `scoped_by` a context selector (community / facility / business unit) or whose endpoints carry a tenant id in the route. Captures: context sources, validation rule, mismatch behavior, denied response, revocation behavior, tamper-test evidence. Without it, the rewrite is at risk of IDOR / cross-tenant data leakage — a serious concern in regulated domains like Senior Living.
+- **`failure_matrix`** at the top level — required for any slice with mutating endpoints (POST / PUT / DELETE, batch toolbars, drag-drop persistence). Captures: 4xx / 5xx behavior, timeout, double-click idempotency, retry path, partial-success handling, refresh-mid-flight, context-switch-mid-edit, push-disconnect, idempotency strategy, queue retention. Without it, the rewrite can lose data or produce duplicates while UI reports success.
+
+A slice without these required blocks where they apply is **not contract-complete**, even if its other claims verify.
+
+## Endpoint verification is per-aspect
+
+URL + method observed in the network is *not* enough to call a mutating endpoint "verified." `endpoints[].verification` carries per-aspect flags: `method`, `route`, `payload_schema`, `response_shape`, `error_shape`, `anti_forgery`, `authorization`. Each is `unknown | observed | observed_partial | source_confirmed`. Mark only what the evidence supports. An endpoint with method+route observed but payload_schema unknown is **partially verified**, not "verified — `unverified: false`."
+
+## Extension mechanism
+
+The schema lists sanctioned values for `event` / `action` / `relation` enums. If a slice surfaces a behavior whose enum value isn't sanctioned, use a kebab-case custom value AND list it in `extensions:` at the bottom of the frontmatter. The skill-learning discipline applies: repeated custom values across artifacts are candidates for the next sanctioned-value list update via Codex review.
 
 ## Skill evolution discipline
 
