@@ -19,6 +19,16 @@ How a control gets its initial data when the page or slice first renders.
 
 For lists also capture: `fields.value` (option value), `fields.text` (visible label), `group_by` if grouped, default sort.
 
+### Server-side business logic that produces the data
+
+Beyond *where* data comes from, the artifact captures the **rules** the server applies to produce it — what records are returned, under what authorization filters, with what computed fields, default ordering, paging, soft-delete and temporal scoping. This goes in the artifact's `business_logic` block, with `code_refs` pointing at the source of each rule.
+
+Example for a residents grid:
+
+> *Returns residents where `Status = 'OnPremise'` AND `IsArchived = false`, scoped to the currently-selected community (filtered by `CommunityAccessFilter` to only those the current user is granted access to), sorted by `LastName` ASC then `FirstName` ASC, paged 25 per page; with computed fields `CareLevel` (resolved from primary `CarePlan`, falls back to "Unassigned") and `CompliancePct` (= completed / total care tasks in the trailing 30 days).*
+
+State the rules concretely. Don't paraphrase as *"filtered by status and community"* — the rewrite session needs the actual rules to reproduce the data. The implementation syntax (LINQ, EF, repository names) stays out; the rules stay in.
+
 ## 2. State change
 
 What happens inside the slice when the user interacts. Differentiated by *where the change is felt*.
@@ -242,6 +252,7 @@ Beyond direct cascade. One slice's action affects others through a shared channe
 | Toast bus | Any slice can emit a toast that appears in a global toast region | Toast region as its own slice; emitting slices reference it via `emits_toast: true` |
 | Refresh propagation | Saving in a modal refreshes the parent grid | Document on the modal: `on_close: refresh_parent` |
 | Global event bus | jQuery `.trigger()` events the page listens for | Event name + payload + listener slices |
+| Out-of-band user-visible side effect | Action triggers an audit-log row visible in an "Activity" panel later; sends an email/notification; updates a search index the user notices on next search | Capture in the slice's `business_logic.user_visible_side_effects` block. **In scope**: effects the user observes elsewhere or later. **Out of scope**: log-only telemetry, OpenTelemetry traces, metrics. |
 
 **Multi-source mutations need extra care**: a counter that updates from 5 different actions has 5 trigger slices, all referencing the same display slice. The artifact must list ALL the sources so the modern rewrite preserves all paths.
 

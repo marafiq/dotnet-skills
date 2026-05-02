@@ -6,6 +6,12 @@ view: <path/to/View.cshtml | "unknown — fill when source arrives">
 view_lines: <e.g. 42-78, optional>
 control_type: <dropdown | textbox | textarea | checkbox | radio | grid | form | modal | drawer | wizard | wizard_step | toolbar | accordion | tab_set | side_menu | breadcrumb | datepicker | daterange | autocomplete | masked_input | numeric_input | toggle_buttons | rich_text | file_upload | loading_indicator | toast | confirmation_dialog | alert | paginator | pane | context_selector | custom>
 
+# URLs where the user encounters this slice (same in legacy and rewrite — routes are preserved).
+# Use route-pattern syntax with named parameters; multiple entries when the slice appears in more than one place.
+routes:
+  - <e.g. "/Residents/Profiles/{residentId}">
+  - <e.g. "/Care/Tracking/{communityId}/.../Pane">         # if also AJAX-loaded as a fragment
+
 # Optional: which view-model property the slice binds to
 binding:
   view_model: <class name | "unknown">
@@ -22,6 +28,52 @@ data_source:
   group_by: <field name | null>
   default_value: <typed value | "today" | "current_user" | "user's last selection" | null>
   pre_filled_from_server: <true | false | null>
+
+# ──────────────── Server-side business logic ────────────────
+# The concrete rules that produce the slice's data. Backed by `code_refs`.
+# The rewrite session reproduces the rules in whatever data layer it picks.
+business_logic:
+  # Which records the slice's data load returns
+  selection:
+    rules:
+      - <e.g. "Returns residents where Status = 'OnPremise' AND IsArchived = false">
+      - <e.g. "Scoped to the currently-selected community (see scoped_by)">
+    code_refs: [<"Controllers/ResidentsController.cs:Index">, <"Services/ResidentQuery.cs:GetOnPremise">]
+
+  # Permission-based filtering applied at query time
+  # (orthogonal to action_authorization, which gates user actions)
+  authorization_filters:
+    - rule: <e.g. "Only residents in communities the current user has been granted access to">
+      code_ref: <"Filters/CommunityAccessFilter.cs">
+
+  # Fields the API surfaces or the view derives that aren't direct properties
+  computed_fields:
+    - name: <e.g. "CareLevel">
+      derivation: <e.g. "Resolved from the resident's primary CarePlan; falls back to 'Unassigned' when no plan">
+      code_ref: <"Models/ResidentListItem.cs:CareLevel">
+    - name: <e.g. "CompliancePct">
+      derivation: <e.g. "completed / total care tasks in the trailing 30 days">
+      code_ref: <"Services/ComplianceCalculator.cs:For">
+
+  ordering:
+    default: <e.g. "LastName ASC, FirstName ASC">
+    user_changeable: <true | false>
+    code_ref: <controller action where ordering applies>
+
+  paging:
+    default_size: <int>
+    server_side: <true | false>
+
+  soft_delete: <e.g. "Records with IsArchived=true are excluded by default; included on 'Show Archived'" | null>
+
+  temporal_scoping: <e.g. "as of the effective date in the global selector" | null>
+
+  # Side effects beyond the immediate UI response that ARE user-visible
+  # (audit row appears in an Activity panel, email/notification triggered, search-index update the user notices)
+  user_visible_side_effects:
+    - kind: <audit_entry | email | notification | search_index | downstream_record>
+      description: <prose: what the user observes elsewhere as a result>
+      code_ref: <where the side effect originates>
 
 # ──────────────── Configuration ────────────────
 # Keys depend on control_type. Populate what fits, drop the rest.
