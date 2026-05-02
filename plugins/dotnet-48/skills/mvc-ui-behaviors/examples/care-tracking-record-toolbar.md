@@ -1,5 +1,5 @@
 ---
-schema_version: 6
+schema_version: 7
 
 # ──────────────── Identity ────────────────
 id: care-tracking-record-toolbar
@@ -28,9 +28,14 @@ contract_status_reason: >
 # partial is rolled forward as the work that gates `complete`.
 contract_status_exceptions: []
 
-# No unresolved cross-slice refs pending — care-tracking-shift-summary-card
-# and dashboard-community-selector both exist in the corpus.
-cross_slice_refs_pending: []
+# global-toast-region is referenced from related_controls and reactivity
+# targets but has not yet been authored as its own slice. Per gate rule 7,
+# this must be acknowledged here rather than silently allowed.
+cross_slice_refs_pending:
+  - ref: global-toast-region
+    referenced_from: "related_controls[2].id; reactivity[*].targets"
+    reason: "Toast region is a global emit-target shared by many slices. Not yet authored as a focused slice; behavior is documented inline here pending a dedicated artifact."
+    expected_to_land: "When a second mutating slice that emits toasts is authored, the toast region earns its own artifact and slices reference it by id."
 
 routes:
   - "/Care/Tracking/{communityId}/Record/{date}/List/{shiftId}"
@@ -116,45 +121,6 @@ business_logic:
       description: "POST returns 200 → server emits SignalR push on `stafftaskshub` → summary card counter and any in-page progress indicators advance within ~1–3 s."
       code_ref: "unknown — fill when source arrives"
       status: observed   # the cause→effect was observed end-to-end during exploration; hub method/frame schema unverified is captured separately under endpoints[stafftaskshub_push]
-
-# ──────────────── Regulated data handling ────────────────
-# This slice WRITES care records — medical-care entries that are PHI under
-# HIPAA and Senior-Living state regulations. The contract here is critical:
-# the rewrite must preserve audit, retention, and minimum-necessary
-# semantics. Most fields are unknown until source arrives.
-regulated_data_handling:
-  surfaces_regulated_data: true
-  data_categories:
-    - "care_note"          # the per-task record carries a care note tied to the resident
-    - "medication"         # depending on task type, may include medication administration
-    - "resident_demographics"   # task records reference resident_id implicitly
-  read_audit:
-    emits_view_audit: unknown
-    audit_target: "unknown — fill when source arrives. Editor presumably writes a view audit when the user opens the per-task editor; the toolbar itself is a write surface."
-    user_visible_to: "unknown — likely admin/compliance role only"
-    status: unknown
-    evidence: "untested — must inspect Activity / Audit panel and confirm whether per-record-write entries surface to non-admin users"
-    n/a_reason: null
-    rewrite_intent: preserve
-  export_audit:
-    emits_export_audit: unknown
-    formats_audited: []
-    status: unknown
-    evidence: "untested — Print button target unknown; whether printing creates an export-audit row is unverified"
-    n/a_reason: null
-  retention:
-    policy: "unknown — Senior-Living state-by-state retention rules typically require 5–10 years for medical-care records; legacy app's specific policy unverified"
-    soft_delete: unknown
-    hard_delete: unknown
-    status: unknown
-    evidence: "untested — must confirm with operator + inspect IsArchived / IsDeleted flags on the task-record table"
-    n/a_reason: null
-  minimum_necessary:
-    role_filtered_fields: unknown
-    description: "Whether different roles (Care Aide / Nurse / Admin) see different field sets in the underlying task records is unverified. The toolbar itself shows only the queue count; the editor is where field exposure differs."
-    status: unknown
-    evidence: "untested — must exercise at least three role variants"
-    n/a_reason: null
 
 # ──────────────── Configuration ────────────────
 configuration:
@@ -557,7 +523,7 @@ failure_matrix:
     evidence: "Success path observed; failure path untested. Required cell for mutating slices — must be exercised by forcing a 5xx and observing whether the queue clears or persists for retry."
   concurrency_conflict:
     status:   unknown
-    behavior: "Two staff members open the same shift on different devices and each commit a partially-overlapping queue. Last-write-wins assumed (legacy MVC default); whether the second writer sees a 409 or silently overwrites the first writer's records is unverified. Senior-Living domain risk: lost care entries are clinically significant."
+    behavior: "Two staff members open the same shift on different devices and each commit a partially-overlapping queue. Last-write-wins assumed (legacy MVC default); whether the second writer sees a 409 or silently overwrites the first writer's records is unverified. The behavior either way is contractual — the rewrite must reproduce or improve it."
     evidence: "untested — must exercise by opening the same shift in two browser sessions, queue records on both, commit one, then commit the other; confirm whether the second commit displaces or merges."
   audit_emission:
     status:   unknown

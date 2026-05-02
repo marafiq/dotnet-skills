@@ -58,8 +58,11 @@ Every slice whose data depends on the context declares the dependency:
 
 ```yaml
 # in a scoped slice's artifact
-scoped_by: dashboard-community-selector
+scoped_by:
+  - dashboard-community-selector
 ```
+
+`scoped_by` is an array (a slice can be scoped by multiple selectors — e.g. community AND fiscal year). Use `null` when the slice has no scope dependency. Single-selector slices use a one-element list, not a bare string.
 
 The downstream rewrite must:
 

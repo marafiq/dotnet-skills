@@ -315,13 +315,13 @@ Keep entries terse. They are for the human reviewer auditing how the artifact go
 
 ## Privacy
 
-The running app shows real data. **Generalize observed values everywhere in the artifact**, including the verification log. The Senior-Living domain is regulated; resident names, room numbers, dates of birth, medication entries, and tenant names are PHI / PII. The artifact is a behavioral contract, not a data dump.
+The running app shows real data. **Generalize observed values everywhere in the artifact**, including the verification log. The artifact is a behavioral contract, not a data dump; one tenant's data should not pollute it.
 
 - *"The dropdown contains the residents currently on premise"* — not *"contains Lily Avelar, Frankie Blake, James Bond, …"*.
 - *"The toast confirms the action with text matching the artifact's claim"* — paraphrase if any verbatim leak would expose specifics.
 - Verification log entries: *"2026-05-02 — claim 7 verified: only granted communities appear in the option list (tested with Community-A grant absent)"* — synthetic labels, not real names.
 
-Reject everywhere in the artifact (frontmatter, claims, edge-case prose, AND verification log): tenant names, tenant ids, resident names, room numbers, emails, dates of birth, phone numbers, addresses, medical record numbers, hostnames, any identifier that ties an artifact to a single real tenant or person. Use synthetic labels (`Community-A`, `Resident-1`, `Date-X`) when a worked example is necessary.
+Reject everywhere in the artifact (frontmatter, claims, edge-case prose, AND verification log): tenant names, tenant ids, resident names, room numbers, emails, dates of birth, phone numbers, addresses, hostnames, any identifier that ties the artifact to a single real tenant or person. Use synthetic labels (`Community-A`, `Resident-1`, `Date-X`) when a worked example is necessary.
 
 If the running app is a production tenant, ask the user whether they prefer pointing the skill at a staging environment. Production observation works; staging is safer. If only production is available, every value typed into the artifact must be a synthetic label even if the data on screen is real.
 

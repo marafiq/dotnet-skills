@@ -1,5 +1,5 @@
 ---
-schema_version: 6
+schema_version: 7
 
 # ──────────────── Identity ────────────────
 id: dashboard-community-selector
@@ -89,42 +89,6 @@ business_logic:
       description: "Selection change re-renders every scoped slice across the app via full-page reload."
       code_ref: "unknown"
       status: observed
-
-# ──────────────── Regulated data handling ────────────────
-# This slice does NOT itself surface PHI — it changes scope, and downstream
-# slices show or hide PHI according to the new scope. But the act of
-# scope-switching IS a security-significant event in regulated software,
-# because it expands or contracts the user's effective access to PHI.
-regulated_data_handling:
-  surfaces_regulated_data: false
-  data_categories: []
-  read_audit:
-    emits_view_audit: unknown
-    audit_target: "unknown — fill when source arrives. Whether community-switch is logged to a per-user audit is unverified."
-    user_visible_to: "unknown"
-    status: unknown
-    evidence: "untested — exercise by switching communities and inspecting any user-facing audit or activity feed for switch entries"
-    n/a_reason: null
-    rewrite_intent: improve
-  export_audit:
-    emits_export_audit: false
-    formats_audited: []
-    status: n/a
-    evidence: "n/a — selector has no export affordance"
-    n/a_reason: "Selector has no export / print button. Export concerns belong to slices that surface data."
-  retention:
-    policy: "n/a — selector owns no record lifecycle"
-    soft_delete: false
-    hard_delete: false
-    status: n/a
-    evidence: "n/a — slice has no underlying records"
-    n/a_reason: "Selector is a read-write context switcher; the only state it changes is the user's current-community session value, which is overwritten on each switch (no historical retention)."
-  minimum_necessary:
-    role_filtered_fields: true   # option list is grant-filtered
-    description: "Option list shows only communities the user has been granted access to. Selection narrows or widens that user's effective scope; downstream slices apply minimum_necessary on the data they show."
-    status: observed_partial
-    evidence: { test_id: "probe_grant_filter_visible" }   # observed: grant-absent communities don't appear; write-side enforcement (read_vs_write tamper scenario) remains unverified
-    n/a_reason: null
 
 # ──────────────── Configuration ────────────────
 configuration:
@@ -335,7 +299,7 @@ failure_matrix:
     evidence: "n/a — single-actor session-scoped context."
   audit_emission:
     status:   unknown
-    behavior: "Whether community-switch is logged to a per-user audit / activity stream is unknown. In Senior-Living regulated software the boundary-crossing event is reasonable to record for incident response, but the legacy app's behavior here is unverified."
+    behavior: "Whether community-switch emits a user-visible audit row (in any Activity / log feed the user sees) is unknown. The cause→effect — switching scope → audit row appears somewhere — is the contract; whether the legacy app implements it is unverified."
     evidence: "untested — fill when source arrives; verify by inspecting the Activity panel or any user-facing audit feed for switch entries."
 
 # ──────────────── Mode B helpers ────────────────

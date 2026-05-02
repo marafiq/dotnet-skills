@@ -1,5 +1,5 @@
 ---
-schema_version: 6
+schema_version: 7
 
 # ──────────────── Identity ────────────────
 id: care-tracking-shift-summary-card
@@ -123,43 +123,6 @@ business_logic:
       description: "Each task recorded in the editor (downstream slice) likely writes an audit entry. Whether the entry surfaces anywhere on this card is unknown."
       code_ref: "unknown"
       status: unknown
-
-# ──────────────── Regulated data handling ────────────────
-# This card displays counters and shift metadata at the community level.
-# It does NOT directly surface resident-level PHI (names, demographics,
-# care-plan content) — those are inside the editor (downstream slice).
-# But the card IS scoped to a community, so cross-tenant scope leakage
-# would expose another community's task counts.
-regulated_data_handling:
-  surfaces_regulated_data: false
-  data_categories: []   # community-level aggregates only; no resident-identifiable data on this card
-  read_audit:
-    emits_view_audit: unknown
-    audit_target: "unknown — likely no per-card view audit; community-scope view is part of the page-level audit (if any)"
-    user_visible_to: "n/a"
-    status: n/a
-    evidence: "n/a — slice does not surface PHI"
-    n/a_reason: "Card shows aggregate counters only. Per-card view audit is not contractually required for non-PHI surfaces."
-    rewrite_intent: unspecified
-  export_audit:
-    emits_export_audit: unknown
-    formats_audited: []
-    status: n/a
-    evidence: "n/a — slice has no export affordance"
-    n/a_reason: "Card has no export / print button; downstream editor handles its own export concerns."
-  retention:
-    policy: "Card is a view of underlying task records. Retention is governed by the task records themselves (downstream)."
-    soft_delete: unknown
-    hard_delete: unknown
-    status: n/a
-    evidence: "n/a — card is read-only over data owned by other slices"
-    n/a_reason: "No data lifecycle owned by this slice."
-  minimum_necessary:
-    role_filtered_fields: unknown
-    description: "All viewers presumably see the same shift-summary fields. Whether different roles see redacted versions of the counters is unverified."
-    status: unknown
-    evidence: "untested — exercise with at least two distinct roles"
-    n/a_reason: null
 
 # ──────────────── Configuration ────────────────
 configuration:
@@ -477,7 +440,7 @@ unknowns_to_fill_when_source_arrives:
   - "view: which Razor view file renders this card?"
   - "binding.view_model + binding.property"
   - "data_source.populated_by — controller action that returns this view"
-  - "business_logic.selection.rules — which shifts are returned and why"
+  - "business_logic.selection.predicates — which shifts are returned and why (current-day? next 24h? configured per community?)"
   - "business_logic.authorization_filters — exact rule"
   - "business_logic.computed_fields[*].derivation — exact formulas (especially time_remaining_minutes)"
   - "business_logic.temporal_scoping — date-selection mechanism (Change link)"

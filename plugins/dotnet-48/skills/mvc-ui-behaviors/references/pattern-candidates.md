@@ -27,23 +27,24 @@ A registry of patterns, behaviors, or schema fields that have been **proposed** 
 
 ## Active candidates
 
-(Empty — Round 5 promoted concurrency_conflict + audit_emission cells, regulated_data_handling block, mutates_state field, signal_sources.endpoint_id, cross_slice_refs_pending, schema_version, gate rules 6–12 directly into the schema as part of the round itself. Round 6 was a consolidation pass — no new candidates.)
+(Empty — Rounds 5–7 promoted concurrency_conflict + audit_emission cells, mutates_state field, signal_sources.endpoint_id, cross_slice_refs_pending, schema_version, gate rules 6–11 directly into the schema as part of the rounds themselves. Round 7 also REMOVED a previously-promoted block — see history below.)
 
 ## Promoted history
 
-Each row is one breaking schema bump. Non-breaking gate-tightening rounds keep the same `schema_version`.
+Each row is one breaking schema bump. Non-breaking gate-tightening rounds keep the same `schema_version`. Removals are also breaking — they bump the version.
 
-| schema_version | round | additions |
-|----------------|-------|-----------|
+| schema_version | round | additions / removals |
+|----------------|-------|----------------------|
 | 1 | initial | base artifact frontmatter (id, control_type, data_source, business_logic, configuration, validation, reactivity, endpoints, authorization). |
 | 2 | round-1 | per-aspect endpoint verification (replaced single `unverified: bool`); structured `extensions[]`; `tenant_boundary` block introduced. |
 | 3 | round-2 | structured `failure_matrix` cells `{status, behavior, evidence}`; `tamper_matrix` per endpoint; `contract_status` gate (5 rules). |
 | 4 | round-3 | stable `endpoints[].id`; tamper_matrix references via `endpoint_id`; `contract_status_exceptions[]`. |
 | 5 | round-4 | gate rule 6 (evidence coherence); `mutates_state` decouples from HTTP method; broadened `tenant_boundary` triggers; `signal_sources[].endpoint_id`; `cross_slice_refs_pending`; gate rule 8 (Mode B unknowns); `concurrency_conflict` + `audit_emission` cells; privacy lint extended to verification log. |
-| 6 | round-5 | typed evidence shape (`source_refs` as `{path,symbol}` / `{path,line}` / `{test_id}` / `{artifact,section}`); gate rule 10 (`n/a` coherence); structured `business_logic.selection.{predicates, projection, ordering, paging}` REPLACES `selection.rules`; `regulated_data_handling` block; gate rule 11 (PHI coverage); `schema_version` field + gate rule 12; `pattern-candidates.md` registry; `verification_evidence` block parallel to `verification`. |
+| 6 | round-5 | **add**: typed evidence shape (`source_refs` as `{path,symbol}` / `{path,line}` / `{test_id}` / `{artifact,section}`); gate rule 10 (`n/a` coherence); structured `business_logic.selection.{predicates, projection, ordering, paging}` REPLACES `selection.rules`; `schema_version` field + gate rule (originally numbered 12); `pattern-candidates.md` registry; `verification_evidence` block parallel to `verification`. |
 | 6 | round-6 | consolidation pass: aligned SKILL.md gate references with template field names (predicates not rules); `contract_status_exceptions` block now explicitly covers gate-critical `n/a` (not only `observed_partial`); template gate-comment block trimmed to a pointer at SKILL.md to prevent rule-count drift; updated reference docs to v6 schema. No new gate rules. |
+| 7 | round-7 | **remove**: `regulated_data_handling` block (read_audit, export_audit, retention, minimum_necessary) and the prior gate rule 11 (PHI coverage). Compliance / HIPAA-style metadata is project-context per goal.md, not artifact scope. User-visible audit emission stays in scope via `failure_matrix.audit_emission`. **Rationale**: rounds 5–6 let adversarial review drive scope expansion past the goal; round 7 is the scope correction. Current gate is 11 rules (was 12). |
 
-`schema_version` increments only when the round produces a change that requires existing artifacts to be re-shaped — e.g. round-2 introducing structured failure cells, or round-5 replacing `selection.rules` with structured predicates. Gate-tightening rounds that add rules without breaking existing artifacts keep the version stable (round-6 is one such consolidation under v6).
+`schema_version` increments when the round produces a change that requires existing artifacts to be re-shaped — including REMOVALS. Round 7 bumped v6 → v7 because all v6 artifacts must drop the `regulated_data_handling` block to validate.
 
 ## How to use this file
 

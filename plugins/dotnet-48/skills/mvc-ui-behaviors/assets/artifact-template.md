@@ -2,7 +2,7 @@
 # ──────────────── Schema version ────────────────
 # Increment when the artifact schema changes in a way that breaks downstream
 # consumers (linters, the rewrite session, cross-artifact tooling). Current
-# version: 6.
+# version: 7.
 #
 # Version history (canonical: see references/pattern-candidates.md):
 #   v5 — Round 4 — added mutates_state, signal_sources.endpoint_id,
@@ -10,9 +10,13 @@
 #        failure cells, evidence coherence gate.
 #   v6 — Round 5 — typed evidence shape, n/a coherence gate (rule 10),
 #        structured business_logic.selection.{predicates, projection,
-#        ordering, paging} (REPLACES selection.rules), regulated_data_handling
-#        block + gate rule 11, schema_version field + gate rule 12.
-schema_version: 6
+#        ordering, paging} (REPLACES selection.rules), schema_version
+#        field + gate rule.
+#   v7 — Round 7 — scope correction: removed regulated_data_handling
+#        block + gate rule 11. Compliance/HIPAA-style metadata is project-
+#        context, not artifact scope (per goal.md). User-visible audit
+#        emission stays in scope via failure_matrix.audit_emission.
+schema_version: 7
 
 # ──────────────── Identity ────────────────
 id: <kebab-case slug, e.g. care-tracking-record-toolbar>
@@ -170,60 +174,6 @@ business_logic:
       description: <prose: what the user observes elsewhere as a result>
       code_ref: <typed source_ref>
       status: <unknown | observed | source_confirmed>
-
-# ──────────────── Regulated data handling (REQUIRED for PHI / PII slices) ────────────────
-# Senior-Living is regulated (HIPAA in the US, plus state-level retention
-# rules). When a slice surfaces PHI / PII (resident demographics, medical
-# data, room assignments, medication, care notes), this block is REQUIRED.
-# Slices that surface no regulated data set `surfaces_regulated_data: false`
-# and the rest of the block can be `n/a` with `n/a_reason`.
-#
-# Gate rule 11 (PHI coverage): when surfaces_regulated_data: true, every
-# field below must be at status observed | source_confirmed | n/a — and
-# n/a requires n/a_reason. The downstream rewrite session relies on this
-# block to preserve compliance posture across the migration.
-regulated_data_handling:
-  surfaces_regulated_data: <true | false>
-  data_categories: [<e.g. "resident_demographics", "medical_record", "medication", "care_note", "room_assignment", "guardian_contact">]
-
-  # Who-saw-what audit. For PHI reads this is often as important as
-  # who-changed-what. The legacy app may not have this; if it doesn't,
-  # flag rewrite_intent: improve.
-  read_audit:
-    emits_view_audit: <true | false | unknown>
-    audit_target: <prose: where the read-audit row lands (table, file, log)>
-    user_visible_to: <prose: whom the audit is exposed to — admin only? compliance officer? resident on request?>
-    status: <unknown | observed | source_confirmed | n/a>
-    evidence: <typed source_ref or test_id | "untested">
-    n/a_reason: <prose | null>
-    rewrite_intent: <preserve | improve | drop | unspecified>
-
-  # Export & print are exfiltration vectors and need the same audit.
-  export_audit:
-    emits_export_audit: <true | false | unknown>
-    formats_audited: [<pdf | csv | xlsx | print_view>]
-    status: <unknown | observed | source_confirmed | n/a>
-    evidence: <typed source_ref or test_id | "untested">
-    n/a_reason: <prose | null>
-
-  # Retention & deletion. Soft-delete is the legacy norm in this domain;
-  # hard-delete (right-to-erasure) is rare. Both are legitimate.
-  retention:
-    policy: <prose: e.g. "records retained 7 years per state regulation; archived after resident departure">
-    soft_delete: <true | false | unknown>
-    hard_delete: <true | false | unknown>
-    status: <unknown | observed | source_confirmed | n/a>
-    evidence: <typed source_ref or test_id | "untested">
-    n/a_reason: <prose | null>
-
-  # Minimum-necessary: does the slice show only what the user's role needs?
-  # Or does it default-show everything and rely on the user not to look?
-  minimum_necessary:
-    role_filtered_fields: <true | false | unknown>
-    description: <prose: e.g. "Care Aide sees demographics + care plan; Nurse sees those plus medication; Admin sees all + audit">
-    status: <unknown | observed | source_confirmed | n/a>
-    evidence: <typed source_ref or test_id | "untested">
-    n/a_reason: <prose | null>
 
 # ──────────────── Configuration ────────────────
 # Keys depend on control_type. Populate what fits, drop the rest.
@@ -555,7 +505,7 @@ authorization:
   #   - scoped_by is non-null (slice consumes a context selector)
   #   - routes contain a tenant placeholder ({communityId}, {facilityId}, …)
   #   - business_logic.authorization_filters mentions a tenant filter
-  #   - business_logic.selection.rules mention community / facility / tenant
+  #   - business_logic.selection.predicates or rules_summary mention community / facility / tenant
   #   - context_sources is non-empty (session/cookie/claim carrying tenant)
   #   - any reactivity endpoint posts a body field that resolves to a tenant
   #
