@@ -26,13 +26,18 @@ Both first-class.
 
 **Step 1 — read code with the best available tools.** Use the C# language server (e.g. `csharp-lsp`) for symbol navigation, find-references, find-implementations. Trace helpers to their definitions; follow partial-view chains; resolve model bindings; identify event handler attachments. Naive grep is the fallback, not the default. The output is a *structural skeleton* — necessarily incomplete because JS-driven and emergent behavior aren't fully visible in source.
 
-**Step 2 — browser, five rules** (was four):
+**Step 2 — browser.** Two halves, both essential — neither subordinate to the other.
 
-1. **Discover** — find behaviors step 1 couldn't see (JS handlers, runtime data-* manipulation, third-party widget defaults, server-pushed updates, server-side conditional branches that didn't fire in your read path).
+*What step 2 does — four modes:*
+
+1. **Discover** — find behaviors step 1 couldn't see (JS handlers, runtime `data-*` manipulation, third-party widget defaults, server-pushed updates, server-side conditional branches that didn't fire in your read path).
 2. **Verify** — confirm what step 1 captured.
 3. **Improve** — sharpen wording / remove ambiguity even when claims pass.
 4. **Enrich** — add timing windows, choreography of side effects, cross-slice nuance, dynamic content variants.
-5. **Run a semi-deterministic / automatic probe sequence** where the slice allows it. Two sessions exercising the same slice should produce equivalent claims. The browser is a first-class probe surface, not a verification afterthought. The trade-off between procedural rigor and creative judgment is per slice (a required-field check is highly automatable; a multi-actor workflow involves more judgment).
+
+*How step 2 operates — one operating constraint that shapes all four modes:*
+
+5. **Run a semi-deterministic / automatic probe sequence** where the slice allows it. Two sessions exercising the same slice should produce equivalent claims. The browser is a first-class probe surface, not a verification afterthought. The trade-off between procedural rigor and creative judgment is per slice — a required-field check is highly automatable; a multi-actor workflow involves more judgment.
 
 ### Scope of the artifact — concrete, evidence-backed behavior
 
@@ -94,7 +99,7 @@ A one-off observation belongs in the slice's artifact (its `## Edge cases` or ve
 
 ### Operating principles
 
-- **Inputs:** source code + authenticated browser. Both first-class. Source-pending mode is a narrow contingency.
+- **Inputs:** source code + authenticated browser. Both first-class. Mode B (browser-first when source isn't yet on disk) is the working mode in early modernization phases — not a narrow contingency. As source arrives, transition to Mode A (code + browser); both modes are legitimate working states, not exception cases.
 - **Environment:** beta — destructive actions permitted with reasonable restraint.
 - **Reviewer:** Codex (adversarial). Build for that review.
 - **Domain:** Senior Living. Real residents, real care, regulated industry. Extreme ownership: claims are defensible against evidence; nothing speculative passes as verified.

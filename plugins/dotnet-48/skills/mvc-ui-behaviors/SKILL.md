@@ -55,7 +55,7 @@ Each slice is one Markdown file: rich YAML frontmatter for structured fields + M
 4. Iterate until verified        (always)
 ```
 
-Source-pending fallback (Mode B, when source is temporarily unavailable) is a narrow contingency — see [`references/code-pending-mode.md`](references/code-pending-mode.md).
+Mode B (browser-first when source isn't yet on disk) is a legitimate working mode — common in early-phase modernization when source access lags. As source arrives, transition to Mode A (code + browser). See [`references/code-pending-mode.md`](references/code-pending-mode.md).
 
 **If the user supplies neither source nor a running URL, ask for one or both.** The skill cannot work from prose alone. Source + browser is the standard configuration; either alone is degraded.
 
@@ -108,13 +108,16 @@ If you encounter a widget pattern that confuses you, **ask the user before guess
 
 The browser is a first-class probe surface, not a verification afterthought. Static analysis misses behavior in scripts you didn't find, in helpers that override defaults invisibly, in stale code paths, and in server-driven behaviors (SignalR pushes, server-only validation, push notifications) that don't show up in the view.
 
-### The five rules of step 3
+### What step 3 does — four modes
 
 1. **Discover** — find behaviors step 2 couldn't see (JS handlers in bundled `.js`, runtime `data-*` manipulation, third-party widget defaults, server-pushed regions, server-side conditional branches that didn't fire when you read). If exercising the slice surfaces no surprises, you didn't exercise it hard enough.
 2. **Verify** — confirm the claims that did land in step 2.
 3. **Improve** — sharpen wording even when claims verify; remove ambiguity.
 4. **Enrich** — add timing windows, choreography of side effects, cross-slice nuance, dynamic content variants, edge cases that only appear under interaction.
-5. **Run a semi-deterministic / automatic probe sequence** where the slice allows it. Two sessions exercising the same slice should produce equivalent claims. The trade-off between procedural rigor and creative judgment is per slice — a required-field check is highly automatable; a multi-actor workflow involves more judgment.
+
+### How step 3 operates — one operating constraint that shapes all four modes
+
+5. **Run a semi-deterministic / automatic probe sequence** where the slice allows it. Two sessions exercising the same slice should produce equivalent claims. The trade-off between procedural rigor and creative judgment is per slice — a required-field check is highly automatable; a multi-actor workflow involves more judgment. The browser is a first-class probe surface, not a verification afterthought.
 
 ### Three operational practices for the probes
 
