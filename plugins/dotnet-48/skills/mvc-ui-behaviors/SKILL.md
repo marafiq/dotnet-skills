@@ -264,7 +264,7 @@ A pattern enters the skill (taxonomy or artifact schema) only when:
 
 A one-off observation goes into the slice's artifact (in `## Edge cases`, the verification log, or as a behavioral claim of that slice). It does not immediately reshape the skill.
 
-The bookkeeping for this discipline lives in [`references/pattern-candidates.md`](references/pattern-candidates.md) — a registry of proposed additions with evidence count, status, and the schema_version history. Every promotion of a candidate to the canonical schema increments `schema_version` in `assets/artifact-template.md` (gate rule 12).
+The bookkeeping for this discipline lives in [`references/pattern-candidates.md`](references/pattern-candidates.md) — a registry of proposed additions with evidence count, status, and the schema_version history. Every promotion of a candidate to the canonical schema increments `schema_version` in `assets/artifact-template.md` (gate rule 11).
 
 ## Legacy stacks pull off more than people remember
 
