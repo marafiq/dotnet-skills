@@ -27,7 +27,7 @@
       "name": "dotnet-10",
       "source": "./plugins/dotnet-10",
       "description": "ASP.NET Core MVC, EF Core on .NET 10 (C# 14). Modern .NET runtime patterns.",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "author": {
         "name": "marafiq"
       },
