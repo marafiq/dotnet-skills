@@ -160,6 +160,81 @@ Then design the refactor against the graph, citing node IDs as evidence.
 Hand the design to Roslynator CLI / IDE refactorings / the Copilot
 modernization agent for execution. Do NOT execute via this skill.
 
+## Cross-validation and fallback to standard LLM tools
+
+The scripts are heuristic-bounded — regex-based for Razor diversity,
+syntactic (not semantic) for typed C#, pattern-list-based for string
+contexts. They can miss patterns the codebase invents (custom
+`HtmlHelper` extensions, source-generator output, Blazor `.razor` files,
+SignalR hub method strings, route templates, custom attribute
+serialization names) and they can over-match in unusual codebases.
+
+**Always cross-validate before trusting the graph.** Run a baseline
+sanity check with the harness's standard tools and reconcile any
+discrepancy with the user before proceeding to refactor design.
+
+### Step 1: Baseline cross-check (every invocation)
+
+```bash
+# Case-insensitive identifier scan; the floor of what should be caught.
+rg -i --word-regexp '<MemberName>' <solution-dir>
+```
+
+Compare the count to `graph.summary.total_refs`. Material discrepancy
+(>5% miss, or a missing file the user expected) means the scripts under-
+covered. Investigate before designing the refactor.
+
+For symbol names that include compound casing variants
+(`PictureFileName` / `pictureFileName` / `picturefilename`), also run:
+
+```bash
+rg --pcre2 '\b(PictureFileName|pictureFileName|picturefilename|picture_file_name|picture-file-name|PICTURE_FILE_NAME)\b' <solution-dir>
+```
+
+Every variant the script's `summary.drift_smells.evidence` flagged should
+appear in this rg output. If rg surfaces a casing variant the script's
+generator didn't include, extend the variant list in
+`string-typed-refs.csx`.
+
+### Step 2: Per-scanner fallback paths
+
+When a scanner errors, returns 0 in a populated codebase, or under-covers
+relative to the rg cross-check:
+
+| Scanner failure mode | Fallback path |
+|---|---|
+| `typed-cs-refs.csx` crashes on parse, or returns 0 in a code-bearing project | (a) `LSP findReferences` at the declaration position via `Microsoft.CodeAnalysis.LanguageServer` if wired, (b) `roslynator find-symbol --match "Name=='X'" <sln>` if Roslynator can load the project, (c) `rg --type cs '\b<MemberName>\b' <solution-dir>` + manual `Read` of each hit's enclosing context, (d) dispatch the **`Explore` Agent** with a prompt to find every usage and classify by site type. |
+| `razor-refs.csx` misses a Razor pattern (custom helper, `.razor` Blazor file, source-generated cshtml) | (a) Extend the regex list in `scripts/razor-refs.csx` with the new pattern, (b) `rg --type-add 'razor:*.{cshtml,razor}' --type razor '<MemberName>' <solution-dir>` and manually classify, (c) for `.razor` Blazor specifically, the scanner does not handle it — use rg + Read directly. |
+| `string-typed-refs.csx` misses a string context the codebase uses (e.g. `[Route("...")]`, `[ProtoMember(Name="X")]`, custom attribute schemas) | (a) Extend `ClassifyCsContext` in `scripts/string-typed-refs.csx` with the new attribute name, (b) `rg --pcre2 -i '<all-case-variants>' <solution-dir>` filtered to the file types the codebase actually uses for that contract. |
+| `assemble-graph.csx` fails to spawn subprocess (dotnet-script not on PATH, sandbox restriction) | Run the three scanners individually with `--out` paths, then invoke `assemble-graph.csx --typed-refs ... --razor-refs ... --string-typed-refs ...` to compose pre-computed JSON. |
+| Solution truly unsupported (e.g. Roslyn parse errors on every `.cs` file due to preprocessor directives the script does not honor) | Skip the typed-cs scanner; rely on `rg --word-regexp` + Read + the `Explore` Agent. The skill degrades to a *guided* discovery rather than an *automated* one — the workflow shape is still useful even when the scripts cannot run. |
+
+### Step 3: When discrepancies remain, surface them
+
+If after fallback the script-graph and the rg cross-check still disagree:
+
+1. **Do not silently degrade.** Tell the user: "the scripts found N refs;
+   rg found M (Δ=…); here are the candidates the scripts missed:
+   `<file>:<line>` (kind: …)". Let the user judge whether to extend the
+   scanner, hand-edit, or proceed with the smaller set.
+2. **Prefer the Explore Agent** for breadth-deep investigations. The
+   Agent has its own context window and can read 50 candidate files and
+   summarize back without polluting the main session's context.
+3. **Record the gap in the plan file** so the next session knows the
+   scanner needs an extension for this codebase's pattern.
+
+### Step 4: Always-applicable conservative defaults
+
+- For an unfamiliar codebase, *first* invocation should run the rg
+  cross-check, *then* the scripts, *then* compare. If the graph
+  closely matches rg ground truth, trust the graph. If not, fall back.
+- The scripts' precision-vs-recall trade-off is tuned for **high recall**.
+  Expect false positives in noisy codebases — the graph's `kind` and
+  `enclosing_context` fields tell the LLM how to discount them.
+- When in doubt, **include the rg output verbatim in the design
+  evidence**, not just the graph. The LLM should triangulate, not
+  trust a single source.
+
 ## What the skill explicitly does NOT do
 
 - Execute refactors. Producing the graph is the entire scope.
