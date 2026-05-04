@@ -1,7 +1,7 @@
 {
   "name": "dotnet-48",
   "description": "Skills for ASP.NET MVC 5.3 and Web Forms on .NET Framework 4.8 (C# 8.0 with documented polyfill caveats), Entity Framework 6.x, and migration patterns toward ASP.NET Core MVC.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": {
     "name": "marafiq",
     "url": "https://github.com/marafiq"
