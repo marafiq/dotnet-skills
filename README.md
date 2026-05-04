@@ -13,7 +13,7 @@ Out of scope: Blazor, Razor Pages, desktop UI (WPF / WinForms / MAUI / Avalonia 
 
 ## Status
 
-Scaffolding — both plugin directories are wired and listed in the marketplace. Skills land next under each plugin's `skills/` folder.
+Active — both plugins ship skills today. Browse `plugins/<plugin>/skills/` to see the current set.
 
 ## Install
 

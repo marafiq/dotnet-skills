@@ -47,11 +47,13 @@ Clean Architecture, SOLID, DDD, repository, CQRS, Result types, mediator, vertic
 Match claims to what you can defend; put the warrant on the page. *"Completed X — verified by running Y; output matched Z"* beats *"done"*. *"Vaguely familiar with X"* beats false confidence. *"EF Core 7's `ExecuteUpdateAsync`"* beats *"EF supports it"*. Cite authoritative sources (Microsoft Learn, language spec) when at hand; otherwise name what you actually checked — decompiled source, a runtime test, a doc page.
 
 When concision and precision conflict, pay the words for precision.
-## Ethics 
-- Grill user if you do not understand the goal, ask one question at a time, do not start the work untill it is clear to you and we are in agreement. 
-- All the work will be reviewed by Codex 
-- We work in Senior Living Industry and people rely on our software thus you must act as a responsible [role] with extreme ownership on agreed goals.
-- A rigid mindset that accepts medicore results is not a good thing, excellence comes from practicing small things at all times, and it goes long way. If there is a fix that will have impact on the code, and is small enough should be done, commit or long session should not be used as an excuse.
+
+## Ethics
+
+- Grill user if you do not understand the goal, ask one question at a time, do not start the work until it is clear to you and we are in agreement.
+- All the work will be reviewed by Codex. Expect multi-round feedback on substantive skills — commit history shows the pattern ("Codex Round N", `schema_version` bumps, "rule-count drift" cleanups); prefer one consolidated version bump per stable round over a bump per commit.
+- We work in Senior Living Industry and people rely on our software thus you must act as a responsible engineer with extreme ownership on agreed goals.
+- A rigid mindset that accepts mediocre results is not a good thing, excellence comes from practicing small things at all times, and it goes long way. If there is a fix that will have impact on the code, and is small enough should be done, commit or long session should not be used as an excuse.
 
 ## Scope per plugin
 
@@ -103,7 +105,7 @@ plugins/
     skills/<name>/
       SKILL.md
       [references/, scripts/, assets/]
-    [agents/, commands/, hooks/, .mcp.json]
+    [agents/, commands/, hooks/, .mcp.json — at plugin root if used]
 ```
 
 `.claude-plugin/` directories hold **only** manifests. Components are auto-discovered from each plugin root. Installed namespaces are `/dotnet-48:<name>` and `/dotnet-10:<name>`.
@@ -114,6 +116,8 @@ The plugin choice already pins the runtime — you do not need to declare ".NET 
 
 ### Skill — `plugins/<plugin>/skills/<name>/SKILL.md`
 Frontmatter requires `name` (kebab-case, must match the folder) and `description` (the trigger — state *what* and *when*; front-load; capped at 1,536 chars combined with `when_to_use`). Body under ~500 lines; push detail into `references/`.
+
+**Orchestrator skills.** A skill may act as an orchestrator that routes to sibling sub-skills. Both the orchestrator and its sub-skills live as peers under `skills/` in the same plugin — sub-skills are not nested inside the orchestrator's folder. The orchestrator's `description` declares the family it dispatches to; each sub-skill's `description` declares which orchestrator(s) call it. Sub-skills must be useful standalone — the orchestrator is one entry point, not the only one. Treat orchestrator-skill as a pattern when a domain decomposes into a stable set of sub-decisions that all fit one mental model (e.g. one architectural style with multiple lenses).
 
 ### Subagent — `plugins/<plugin>/agents/<name>.md`
 Frontmatter: `name`, `description` (when to dispatch), optional `tools`, optional `model`. Body is the system prompt. Use specialized agents (e.g. `controller-author`, `efcore-migration-runner`) to protect the main thread's context for long, focused tasks.
@@ -143,6 +147,10 @@ Only when the integration genuinely needs a server (auth flows, long-running con
 
 kebab-case. Name the task, not the technology — `controller-action-results`, not `mvc-controllers`. Folder name = slug = what users actually type.
 
+## Commits
+
+Conventional Commits with a scope: `<type>(<scope>): <subject>`. Scope is the plugin name (`dotnet-10`, `dotnet-48`) for plugin-wide changes, the skill folder name for skill-scoped work, or `claude` for CLAUDE.md edits. Types in active use: `feat`, `fix`, `docs`, `example`.
+
 ## Workflow
 
 Test a plugin locally without installing:
@@ -151,6 +159,23 @@ claude --plugin-dir /path/to/dotnet-skills/plugins/dotnet-48
 claude --plugin-dir /path/to/dotnet-skills/plugins/dotnet-10
 ```
 After edits, run `/reload-plugins`.
+
+After publishing, verify the marketplace install path inside Claude Code:
+```text
+/plugin marketplace add marafiq/dotnet-skills
+/plugin install dotnet-48@dotnet-skills
+/plugin install dotnet-10@dotnet-skills
+```
+
+## Adding a skill
+
+End-to-end checklist; each step links to the section with detail.
+
+1. Create `plugins/<plugin>/skills/<kebab-name>/SKILL.md` with `name` and `description` frontmatter — see *Authoring → Skill*.
+2. Write the body. Push detail into `references/` if length exceeds ~500 lines.
+3. Load and iterate: `claude --plugin-dir plugins/<plugin>`, then `/reload-plugins` after each edit.
+4. Validate: `claude plugin validate plugins/<plugin>`.
+5. Release: bump `version` per *Before release*.
 
 ## Before release
 
