@@ -1,7 +1,7 @@
 {
   "name": "dotnet-10",
   "description": "Skills for ASP.NET Core MVC on .NET 10 with C# 14, Entity Framework Core 10, and modern .NET runtime patterns (DI, hosting, configuration, async).",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "author": {
     "name": "marafiq",
     "url": "https://github.com/marafiq"
