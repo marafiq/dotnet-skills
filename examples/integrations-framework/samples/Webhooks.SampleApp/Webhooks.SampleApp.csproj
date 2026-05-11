@@ -1,0 +1,23 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Webhooks.Events\Webhooks.Events.csproj" />
+    <ProjectReference Include="..\..\src\Webhooks.Compliance\Webhooks.Compliance.csproj" />
+    <ProjectReference Include="..\..\src\Webhooks.Audit\Webhooks.Audit.csproj" />
+    <ProjectReference Include="..\..\src\Webhooks.Outbound\Webhooks.Outbound.csproj" />
+    <ProjectReference Include="..\..\src\Webhooks.Inbound\Webhooks.Inbound.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.7" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.7" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>
