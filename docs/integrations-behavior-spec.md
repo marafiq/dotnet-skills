@@ -210,7 +210,270 @@ Some event types (e.g., `resident.deceased`) are classified Restricted. Subscrib
 **FR-COMP-4. Auth schemes that bypass cryptographic verification require approval.**
 Inbound sources or outbound endpoints that use IP-allowlist-only (no signature, no token) require a compliance approval reference. The approval reference is part of the configuration; the system shall refuse to activate without it.
 
-### 5.7 Cross-cutting — operability
+### 5.7 Outbound — authentication methods catalog
+
+The framework shall support these categories of authentication for outbound deliveries. Each category is a behavioral contract describing what the operator configures, what the system does observably, how rotation works, and how it can fail. Implementations choose specific algorithms and libraries; the spec constrains *what the operator picks from* and *what the system does as a result*.
+
+The dashboard shall present these categories grouped under headings like *Signature*, *Token*, *Transport*, *Other*. Each scheme shows a short description, a "recommended" badge where applicable, and a per-scheme configuration form when selected.
+
+#### 5.7.1 Shared-secret signature (symmetric, HMAC family)
+
+**Operator inputs.** A secret value, a signature header name, an optional timestamp header name, an optional timestamp tolerance (default 5 minutes), an optional template (ALIS-native, Stripe-style, GitHub-style, Slack-style, Custom) that pre-fills the headers and signature format string.
+
+**Behavior.** Every outbound request carries a signature header computed deterministically from a canonical representation of the request (at minimum the body; for templates that include a timestamp, the timestamp is part of the canonical input). The receiver computes the same signature with the same secret to verify.
+
+**Templates the framework shall offer.** ALIS-native (`X-Webhook-Signature`, `X-Webhook-Timestamp`, format `v1=<hex>`); Stripe-compatible (`Stripe-Signature`, single header with `t=<unix>,v1=<hex>`); GitHub-compatible (`X-Hub-Signature-256`, `sha256=<hex>`, no timestamp); Slack-compatible (`X-Slack-Signature`, `X-Slack-Request-Timestamp`, `v0=<hex>`). Templates exist so an operator integrating with a partner whose receiver-side library expects one of these can pick the matching shape without typing header conventions.
+
+**Rotation.** Per FR-OUT-4. During the grace window, both old and new secrets produce valid signatures (the system uses one consistently per delivery; the receiver must accept either).
+
+**Failure modes.** Vault-backed secret unreadable → ConfigurationError (no retry). Receiver returns 401/403 across attempts → ConfigurationError on the second consecutive auth-failure attempt. Computed signature does not match what receiver expects → manifests as 401/403 from receiver.
+
+#### 5.7.2 Asymmetric signature (public-key)
+
+**Operator inputs.** None initially — the framework generates the key pair on registration. Operator downloads the public key in PEM format and shares it with the partner. The private key is never exported, never displayed, never returned in any response.
+
+**Behavior.** Every outbound request carries a signature computed with the private key over a canonical request representation. The receiver verifies with the public key. The framework attaches a header that names which key id signed the request (so receivers can look up the right public key during rotation).
+
+**Rotation.** A new key pair is generated; both public keys are published (via a key id reference) for the grace window; the partner can fetch the new key on their schedule. After the window, only the new key signs.
+
+**When to use.** Receivers who do not want to manage shared secrets (no symmetric secret to leak); receivers who want non-repudiable signatures.
+
+**Failure modes.** Same as shared-secret, plus key-pair generation failure during rotation initiation → ConfigurationError surfaced immediately, rotation aborted.
+
+#### 5.7.3 Static bearer token
+
+**Operator inputs.** A token value (treated as opaque bytes), a recommended rotation cadence (default 90 days, with reminders).
+
+**Behavior.** Every request carries `Authorization: Bearer <token>`. The framework does not parse, validate, or transform the token — it is opaque.
+
+**Rotation.** Direct replacement, optionally with a grace window during which both old and new are accepted by the partner side (the framework alternates or sends both — implementation choice). The dashboard surfaces approaching rotation reminders.
+
+**Failure modes.** Receiver returns 401 → ConfigurationError. Token expired at the partner's side without rotation → manifests as 401.
+
+#### 5.7.4 Token from identity provider (OAuth 2.0 family)
+
+**Operator inputs.** Token endpoint URL, client identifier, client credential reference (secret or certificate), optional scope, optional resource/audience, optional sub-variant selector (Standard OAuth 2.0 client credentials / Azure AD service principal / AWS Signature v4 / other supported variants).
+
+**Behavior.** The framework requests a token from the identity provider using the configured credentials. Tokens are cached for their declared lifetime, refreshed before expiry with a safety margin (default: refresh when 60 seconds remain on the token). Each outbound request attaches the cached token as a bearer token in the Authorization header. Token refresh is invisible to the operator under normal operation; the dashboard exposes the cache state for diagnostic purposes.
+
+**Sub-variants.** The framework distinguishes:
+- *Standard OAuth 2.0 client credentials* — generic IDP, configured by URL.
+- *Azure AD service principal* — adds Azure tenant ID, supports certificate-bound tokens and federated identity, has its own diagnostic surface.
+- *AWS Signature v4* — does not fetch a token; signs every request with cloud credentials per the cloud provider's signing spec. Configured with region, service name, access key, secret key reference (or assumed role).
+- *Other provider-specific protocols* may be added when the user-visible inputs and behavior differ enough to warrant a distinct option (e.g., GCP service account signed JWT).
+
+The framework shall surface these as separate options because their configuration surfaces, failure modes, and operator vocabulary differ — collapsing them under one "OAuth-ish" label confuses operators and produces wrong configurations.
+
+**Rotation.** Client credentials are rotated per FR-OUT-4. Token refresh is automatic.
+
+**Failure modes.**
+- IDP unreachable (timeout/connection): → Retrying (transient).
+- IDP returns 4xx other than 401/403 (rate limit, malformed request): → Retrying with backoff.
+- IDP returns 401/403 (credentials revoked, scope denied): → ConfigurationError, *not* retried, surfaced for operator action.
+- Cached token expired between fetch and partner request (clock skew): → automatic refetch, transparent to operator.
+- Token rejected by receiver (401/403): → distinguish from IDP failures — manifest as ConfigurationError after the second consecutive receiver-401 within a short window.
+
+#### 5.7.5 Mutual TLS (mTLS)
+
+**Operator inputs.** A client certificate and its private key. The framework shall accept upload in two formats: PEM-encoded certificate file plus PEM-encoded key file, or a PFX/PKCS#12 bundle with a passphrase. Optional inputs: subject Common Name (for monitoring labels), TLS version floor (default: TLS 1.2 minimum, TLS 1.3 preferred).
+
+**Generation alternative.** The framework may offer a generate-on-server option where ALIS produces a private key and a Certificate Signing Request (CSR); the operator downloads the CSR, has it signed by their CA, and uploads the resulting certificate back. The private key never leaves the secret store.
+
+**Behavior.** ALIS presents the client certificate during the TLS handshake with the partner. Verification happens at the partner's TLS terminator before any application-layer code runs on the partner's side. No body-level signing is required.
+
+**Expiry tracking.** The framework shall track the certificate's `notAfter` field and surface warnings in the dashboard at 30 days, 14 days, 7 days, and daily within the final week. After expiry, deliveries fail as ConfigurationError until a new certificate is installed.
+
+**Rotation.** A new certificate (and key, if generating fresh) is uploaded; both are valid for the configured overlap period (default 14 days for certificates, longer than for shared secrets because partner-side cert distribution often involves manual steps); after the window, only the new is used.
+
+**Failure modes.**
+- Certificate expired: → ConfigurationError, blocks all deliveries for this endpoint.
+- Partner does not trust our cert chain: → TlsHandshakeFailed (a typed sub-case of FailureReason that distinguishes from generic timeouts).
+- Private key unreadable from secret store: → ConfigurationError.
+
+#### 5.7.6 HTTP Basic
+
+**Operator inputs.** Username and password.
+
+**Behavior.** Every request carries `Authorization: Basic <base64(username:colon:password)>`.
+
+**Spec position.** The framework shall support HTTP Basic for partners that require it but shall mark it visibly as the weakest scheme on the list, prompt for justification at activation, and disable it by default for endpoints handling Standard or Restricted PHI sensitivity unless an explicit compliance approval is recorded.
+
+**Rotation.** Credential change with optional grace window.
+
+#### 5.7.7 IP allowlist only (no application-layer authentication)
+
+**Operator inputs.** A documented compliance approval reference. The dashboard displays the framework's static egress IPs for the operator to share with the partner.
+
+**Behavior.** Outbound requests carry no auth headers. The partner trusts ALIS's source IPs at the network layer.
+
+**Spec position.** Requires compliance approval per FR-COMP-4. Used only when the partner explicitly mandates it (legacy systems, isolated networks). The dashboard shall surface this scheme distinctively (e.g., a warning indicator on the endpoint card).
+
+**Rotation.** Not applicable to authentication; the egress IPs are infrastructure-level. Egress IP changes are coordinated as a separate operations concern with notice to all affected operators.
+
+#### 5.7.8 Composite
+
+**Operator inputs.** Configure two or more of the above schemes.
+
+**Behavior.** Each scheme's signing or header attachment runs in turn for every outbound request. If any one fails to apply (e.g., vault secret missing for the HMAC half), the entire delivery is a ConfigurationError. The receiver is expected to validate every applied scheme independently.
+
+**Use case.** Belt-and-suspenders configurations for high-security receivers (signature for body integrity + bearer token for principal identity).
+
+**Failure modes.** Composite of the parts; the most-specific failure determines the typed reason.
+
+---
+
+### 5.8 Inbound — verification methods catalog
+
+Mirror of §5.8 for inbound. Each verification scheme maps to a category of partner authentication; partner-specific templates pre-fill the conventions. As above, the dashboard groups schemes by category.
+
+#### 5.8.1 Shared-secret signature verification (HMAC family)
+
+**Operator inputs.** A shared secret (provided by the partner; ALIS stores encrypted), the signature header name, the timestamp header name (if applicable), the timestamp tolerance (default 5 minutes), an optional partner template (Stripe, GitHub, Twilio, Slack, ALIS-native, Custom).
+
+**Behavior.** For each incoming request: extract the signature header, extract the timestamp header (if applicable), reconstruct the canonical input, compute the expected signature using the stored secret, compare in constant time. Reject if mismatch; reject if timestamp outside tolerance.
+
+**Templates the framework shall offer.** Stripe (`Stripe-Signature: t=,v1=`), GitHub (`X-Hub-Signature-256: sha256=`, no timestamp; replay defense via idempotency only), Twilio (`X-Twilio-Signature` over URL + sorted form params, SHA-1), Slack (`X-Slack-Signature: v0=` plus `X-Slack-Request-Timestamp`).
+
+**Rotation.** Per FR-IN-4. Single-step replacement; the dashboard surfaces the change in the audit log.
+
+**Failure modes.**
+- Signature header missing or malformed: → SignatureMismatch.
+- Computed signature does not equal received: → SignatureMismatch.
+- Timestamp header missing or outside tolerance: → TimestampOutOfTolerance.
+- Stored secret unreadable: → ConfigurationProblem (HTTP 5xx, partner retries are appropriate).
+
+#### 5.8.2 JWT-bearer with JWKS
+
+**Operator inputs.** The partner's JWKS URL (where their public keys live), the expected audience (`aud` claim), the expected issuer (`iss` claim, optional), the JWT expiry skew tolerance (default 5 minutes), the JWKS refresh interval (default 1 hour).
+
+**Behavior.** Extract the JWT from `Authorization: Bearer`. Look up the signing key from the cached JWKS using the JWT's `kid` (key id) header. If the kid is not in the cache, refresh the JWKS (at most once per minute to defend against unknown-kid spam). Verify the JWT's signature against the looked-up key. Verify expiry within the skew tolerance. Verify audience matches. Verify issuer matches if configured. If all pass, extract the idempotency key per the configured rule and proceed; otherwise reject with the most specific failure reason.
+
+**Failure modes.**
+- JWT malformed: → SignatureMismatch (we cannot parse it; treat as forgery).
+- Signing key not in JWKS even after refresh: → SignatureMismatch.
+- Signature invalid: → SignatureMismatch.
+- Expired beyond skew: → TimestampOutOfTolerance.
+- Audience mismatch: → SignatureMismatch (specifically AudienceMismatch sub-reason if the framework distinguishes).
+- Issuer mismatch (when configured): → SignatureMismatch (IssuerMismatch sub-reason).
+- JWKS endpoint unreachable: → ConfigurationProblem.
+
+**Rotation.** Partner-driven. Keys rotate on the partner's side via JWKS publication; ALIS picks them up automatically through scheduled refresh and on-demand refresh when an unknown kid arrives.
+
+#### 5.8.3 Mutual TLS verification
+
+**Operator inputs.** The partner's expected client certificate or expected CA chain (PEM upload), expected subject Common Name (for binding the cert to the partner identity), expected key usage extensions (optional).
+
+**Behavior.** The TLS handshake on the receive URL requires the partner to present a client certificate. The framework's TLS terminator verifies the chain against the configured trust store and matches the subject CN. If verification fails, the request never reaches application code; the framework records a verification-failure audit entry from the network layer.
+
+**Failure modes.**
+- Partner does not present a certificate: → TLS handshake failure, request rejected before reaching the framework.
+- Partner's certificate chain does not match expected CA: → same.
+- Subject CN does not match: → verification failure recorded, request rejected.
+
+**Rotation.** Partner-driven. The framework supports configuring multiple expected certificates (overlap window) for partner-side rotation.
+
+#### 5.8.4 API key in header
+
+**Operator inputs.** The secret value (provided by the partner or generated by ALIS), the header name (default `X-API-Key`).
+
+**Behavior.** Extract the header; compare with the stored secret using constant-time equality. Accept on match, reject on mismatch.
+
+**Spec position.** Provides authentication of *principal* but no integrity check on the body. The framework shall warn the operator at registration if API-key-only is selected for sources that handle Standard or Restricted PHI sensitivity, and shall require composite (API key + IP allowlist or API key + signature) for those cases unless an explicit compliance approval is recorded.
+
+**Rotation.** Direct replacement; optional grace window where both keys are accepted.
+
+#### 5.8.5 IP allowlist only
+
+**Operator inputs.** A list of allowed IPv4/IPv6 ranges (CIDR notation), a documented compliance approval reference, an optional X-Forwarded-For trust policy (the framework needs to know whether to trust X-Forwarded-For from a reverse proxy).
+
+**Behavior.** Determine the source IP per the X-Forwarded-For trust policy. Reject if the source IP is not in any allowed range. No per-request signature check.
+
+**Spec position.** Requires compliance approval per FR-COMP-4. Often paired in composite (e.g., IP allowlist + API key) for partners that cannot do signing but operate from a known network.
+
+**Failure modes.** Source IP not in allowlist: → IpNotAllowed. X-Forwarded-For trust misconfigured (header trusted from non-proxy source): logged as ConfigurationProblem at registration if the framework can detect; otherwise as IpNotAllowed at receive time.
+
+#### 5.8.6 Composite
+
+**Operator inputs.** Configure two or more of the above.
+
+**Behavior.** Every configured check must pass. If any fails, the request is Rejected with the most-specific failure reason (e.g., if signature passes but timestamp is stale, the reason is TimestampOutOfTolerance, not SignatureMismatch).
+
+**Use case.** Strong-defense configurations: signature + IP allowlist; API key + IP allowlist; mTLS + JWT (transport identity + application identity).
+
+#### 5.8.7 Provider-specific compatibility templates
+
+The framework shall provide pre-configured verification templates for partners whose webhook schemes are well-known: Stripe, GitHub, Twilio, Slack, Salesforce, and others as added. Each template:
+
+- Pre-fills the verification scheme category (HMAC, JWT, etc.) with the partner's specific conventions.
+- Pre-fills header names, signature format, timestamp handling.
+- Pre-fills the idempotency-key extraction rule (e.g., Stripe `$.id`, GitHub `X-GitHub-Delivery`, Twilio `MessageSid` from form body).
+- Documents the partner's published verification contract inline (a short paragraph linking to the partner's docs).
+- Pre-fills any partner-specific quirks (e.g., GitHub does not include a timestamp; Twilio signs over URL + sorted form params, not raw body).
+
+Operators may select a template as a starting point and customize. The framework shall version templates and warn operators when a partner has updated their published contract since the template was last refreshed.
+
+---
+
+### 5.9 Cross-cutting — credential and certificate handling
+
+The framework deals with several kinds of secret material across both directions. Behavior shall be uniform across them.
+
+#### 5.9.1 Storage and visibility
+
+**Storage.** All secret material is stored encrypted at rest in a vault-style store. The framework shall not write plaintext secret material to logs, audit entries, error responses, dashboards, telemetry, or exports. References (vault paths, key ids) are surfaced; values are not.
+
+**Display.** The dashboard shall represent stored secrets by their reference path and metadata (created at, version, owner) — never by their bytes. A reveal action (5.10.4) is the only path to seeing the bytes.
+
+#### 5.9.2 Upload formats
+
+The framework shall accept the following upload formats. The dashboard offers each in a context-appropriate file picker that recognizes the format from extension and content.
+
+| Format | Used for | Notes |
+|---|---|---|
+| Pasted text | Shared secrets, bearer tokens, API keys, IDP client secrets | UI shall mask the field; no preview after submission |
+| PEM (single file) | Public certificates, public keys | Recognized by `-----BEGIN CERTIFICATE-----` / `-----BEGIN PUBLIC KEY-----` |
+| PEM (paired files) | Certificate + private key for mTLS or asymmetric signing | UI accepts both files in one upload step |
+| PFX / PKCS#12 (single file) | Bundled certificate + private key with passphrase | UI prompts for passphrase; passphrase is one-time use, never stored |
+| JWKS endpoint URL | Partner public keys for JWT verification | Framework fetches and caches; refresh interval configurable |
+| Static IP / CIDR list | IP allowlists | Comma-separated or one-per-line |
+
+Files shall be validated synchronously on upload: parse the format, extract metadata (issuer, subject, expiry for certificates; key type and size for keys), reject malformed input with a typed reason, surface metadata in the dashboard for operator confirmation before storing.
+
+#### 5.9.3 Generation
+
+For asymmetric signature schemes and (optionally) for mTLS, the framework shall offer to generate key material server-side. Generated private keys are written directly to the secret store and never returned in any response. Generated public material (public key, CSR) is downloadable once and then re-derivable on demand from the stored private key.
+
+The dashboard shall make clear at generation time which material is server-generated (private key) vs operator-provided.
+
+#### 5.9.4 Reveal
+
+Every secret reveal action shall be:
+
+- **One-time per generation/rotation.** After the first reveal, the secret can only be replaced via rotation, not re-revealed.
+- **Role-gated.** Only roles with explicit reveal permission may invoke. A second factor may be required by tenant policy.
+- **Justification-required.** A free-text reason is mandatory; the framework shall not surface a reveal without one.
+- **Audited.** Reveal generates a high-priority audit entry: actor, IP, time, justification, the specific secret reference revealed.
+- **Time-limited display.** Once shown, the reveal UI exposes the value for a bounded time (default 60 seconds) before automatically masking again. Copy-to-clipboard is offered to reduce shoulder-surfing risk.
+
+#### 5.9.5 Expiry tracking
+
+For all material with embedded expiry (certificates, JWT-signed content if recorded, OAuth refresh tokens with declared expiry):
+
+- The framework shall index the expiry date at storage time.
+- The dashboard shall surface upcoming expiries: 30 days (notice), 14 days (warning), 7 days (alert), within 24 hours (escalation).
+- The framework shall block deliveries that depend on expired material with a typed ConfigurationError, naming the expired item.
+
+#### 5.9.6 Provenance and chain of custody
+
+Each secret reference shall carry metadata describing how it arrived: uploaded by user X at time T, generated by system at time T, rotated from version N-1 at time T. The audit log shall be the source of truth for this chain.
+
+#### 5.9.7 Composite credentials
+
+When a scheme requires multiple pieces of secret material (e.g., mTLS = cert + key; OAuth 2.0 with cert-bound = cert + key + IDP config), the framework shall treat them as one logical credential for rotation purposes. Replacing the credential rotates all parts together; the dashboard shall not allow partial rotation that would leave a half-valid configuration.
+
+---
+
+### 5.10 Cross-cutting — operability
 
 **FR-OPS-1. Health visible at a glance.**
 The dashboard shall surface, per tenant: total deliveries (24h), total receipts (24h), failed delivery count (24h), dead-lettered count, per-endpoint success rate, per-source verification rate.
