@@ -175,7 +175,25 @@ code{font-family:var(--mono);font-size:0.92em;}
 .field-label .req{color:var(--accent);font-family:var(--mono);font-size:10px;}
 .field-label .optional{color:var(--ink-faint);font-weight:400;font-size:11.5px;}
 .field-help{font-size:12.5px;color:var(--ink-soft);line-height:1.5;}
-.field-error{font-size:12px;color:var(--bad);line-height:1.4;}
+.field-error{font-size:11.5px;color:var(--bad);line-height:1.4;display:flex;align-items:flex-start;gap:5px;margin-top:3px;}
+.field-error::before{content:"!";font-weight:700;font-family:var(--mono);color:white;background:var(--bad);width:14px;height:14px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:9px;flex-shrink:0;margin-top:1px;}
+.field-error.warn{color:var(--warn);}
+.field-error.warn::before{background:var(--warn);}
+.field-error.info{color:var(--info);}
+.field-error.info::before{background:var(--info);content:"i";}
+.field-required-tag{font-size:9.5px;font-weight:600;color:var(--accent);text-transform:uppercase;letter-spacing:0.05em;background:var(--accent-bg-2);padding:1px 5px;border-radius:3px;line-height:1.2;margin-left:4px;}
+.field-conditional-tag{font-size:9.5px;font-weight:600;color:var(--info);background:var(--info-bg);border:1px solid var(--info-line);padding:1px 5px;border-radius:3px;line-height:1.2;margin-left:4px;text-transform:none;letter-spacing:0;}
+.field-valid-tag{font-size:11px;color:var(--ok);margin-left:4px;font-weight:600;}
+.input.invalid,.select.invalid,.textarea.invalid{border-color:var(--bad);background:var(--bad-bg);}
+.input.invalid:focus,.select.invalid:focus,.textarea.invalid:focus{box-shadow:0 0 0 3px var(--bad-bg);border-color:var(--bad);}
+.input.valid{border-color:var(--ok);}
+.field.has-error .field-label{color:var(--bad);}
+.section-status{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;padding:3px 8px;border-radius:999px;margin-left:auto;height:20px;}
+.section-status.ok{color:var(--ok);background:var(--ok-bg);border:1px solid var(--ok-line);}
+.section-status.missing{color:var(--bad);background:var(--bad-bg);border:1px solid var(--bad-line);}
+.section-status.partial{color:var(--warn);background:var(--warn-bg);border:1px solid var(--warn-line);}
+.section-status.pristine{color:var(--ink-soft);background:var(--surface-2);border:1px solid var(--line);}
+.form-section-titles h2{display:flex;align-items:center;gap:var(--s-2);}
 .input,.select,.textarea{width:100%;height:34px;padding:0 12px;background:var(--surface);border:1px solid var(--line-strong);border-radius:var(--r-2);font-size:13px;transition:all .12s;}
 .input:hover,.select:hover{border-color:var(--ink-faint);}
 .input:focus,.select:focus,.textarea:focus{outline:none;border-color:var(--accent);box-shadow:var(--shadow-focus);}
@@ -785,9 +803,13 @@ code{font-family:var(--mono);font-size:0.92em;}
         <div class="form-section-header"><div class="form-section-num">01</div><div class="form-section-titles"><h2>Basics</h2><p>Give this endpoint a name your team will recognize.</p></div></div>
         <div class="form-section-body">
           <div class="field-row">
-            <div class="field"><label class="field-label">Endpoint name <span class="req">·</span></label><input class="input" id="ob-name" value="Brookside Billing" /></div>
+            <div class="field" data-validate="ob-name">
+              <label class="field-label">Endpoint name <span class="field-required-tag">required</span></label>
+              <input class="input" id="ob-name" value="Brookside Billing" />
+              <div class="field-error" id="ob-name-error" style="display:none;">Required · 3–80 characters</div>
+            </div>
             <div class="field"><label class="field-label">Owning team <span class="optional">optional</span></label><select class="select"><option>Brookside · Finance</option><option>Brookside · Clinical</option><option>Brookside · IT</option></select></div>
-            <div class="field"><label class="field-label">Environment</label><select class="select"><option>Production</option><option>Staging</option><option>Sandbox</option></select></div>
+            <div class="field"><label class="field-label">Environment <span class="field-required-tag">required</span></label><select class="select"><option>Production</option><option>Staging</option><option>Sandbox</option></select></div>
           </div>
         </div>
       </div>
@@ -796,8 +818,12 @@ code{font-family:var(--mono);font-size:0.92em;}
       <div class="form-section done" data-step="2">
         <div class="form-section-header"><div class="form-section-num">02</div><div class="form-section-titles"><h2>Destination</h2><p>Where ALIS will POST event payloads. HTTPS is required for production; loopback is allowed for development only.</p></div></div>
         <div class="form-section-body">
-          <div class="field"><label class="field-label">Endpoint URL <span class="req">·</span></label>
-            <div class="url-display"><span class="url-method">POST</span><span class="url-value">https://billing.brookside.health/hooks/alis</span></div>
+          <div class="field" data-validate="ob-url">
+            <label class="field-label">Endpoint URL <span class="field-required-tag">required</span><span class="field-conditional-tag">HTTPS only (loopback allowed for dev)</span></label>
+            <div class="url-display"><span class="url-method">POST</span><span class="url-value" id="ob-url-display">https://billing.brookside.health/hooks/alis</span></div>
+            <input type="hidden" id="ob-url" value="https://billing.brookside.health/hooks/alis" />
+            <div class="field-help">Per <span class="mono">NFR-SEC-2</span>: must be HTTPS in production. Per <span class="mono">NFR-SEC-3</span>: validated against SSRF policy (no internal addresses).</div>
+            <div class="field-error" id="ob-url-error" style="display:none;">Required · destination URL</div>
             <button class="btn btn-sm mt-2" data-action="validate-url">Validate URL now</button>
           </div>
           <div id="url-validation-result"></div>
@@ -816,10 +842,11 @@ code{font-family:var(--mono);font-size:0.92em;}
 
       <!-- Section 04: Subscribed events -->
       <div class="form-section" data-step="4">
-        <div class="form-section-header"><div class="form-section-num">04</div><div class="form-section-titles"><h2>Subscribed <em>events</em></h2><p>Which event types should be delivered to this endpoint?</p></div></div>
+        <div class="form-section-header"><div class="form-section-num">04</div><div class="form-section-titles"><h2>Subscribed <em>events</em> <span class="field-required-tag">at least 1 required</span></h2><p>Which event types should be delivered to this endpoint?</p></div></div>
         <div class="form-section-body">
           <button class="btn" data-action="pick-events">+ Choose event types</button>
           <div id="ob-events-summary" class="text-soft mt-2" style="font-size:12.5px;font-style:italic;">none selected yet</div>
+          <div class="field-error" id="ob-events-error" style="display:flex;">Required · subscribe to at least one event type</div>
         </div>
       </div>
 
@@ -1010,11 +1037,23 @@ code{font-family:var(--mono);font-size:0.92em;}
       <div class="form-section" data-step="2">
         <div class="form-section-header"><div class="form-section-num">02</div><div class="form-section-titles"><h2>Your <em>receive URL</em></h2><p id="inb-receive-blurb">This is the URL you give the partner. The path is unique to this tenant + source so traffic stays isolated.</p></div></div>
         <div class="form-section-body">
-          <div class="field"><label class="field-label" id="inb-url-label">URL to share <span class="req">·</span></label>
+          <div class="field"><label class="field-label" id="inb-url-label">URL to share <span class="field-required-tag">required</span></label>
             <div class="url-display"><span class="url-method">POST</span><span class="url-value" id="inb-url">https://hooks.alis.health/brookside/in/stripe-prod</span><button class="url-action" data-action="copy-inb-url">Copy</button></div>
-            <div class="field-help" id="inb-url-help">Configure this URL in your provider's webhook settings.</div>
+            <div class="field-help" id="inb-url-help">Configure this URL in your provider's webhook settings. Stable for the lifetime of this source.</div>
           </div>
-          <div class="field-row"><div class="field"><label class="field-label">Path slug</label><input class="input mono" id="inb-slug" value="stripe-prod" /><div class="field-help">Lowercase, hyphens, no spaces. Stable for the lifetime of the source.</div></div><div class="field"><label class="field-label">Source name <span class="req">·</span></label><input class="input" id="inb-name" value="Stripe Payments" /></div></div>
+          <div class="field-row">
+            <div class="field" data-validate="inb-slug">
+              <label class="field-label">Path slug <span class="field-required-tag">required</span><span class="field-conditional-tag">lowercase + hyphens only</span></label>
+              <input class="input mono" id="inb-slug" value="stripe-prod" />
+              <div class="field-help">Stable for the lifetime of this source. Cannot be changed once activated.</div>
+              <div class="field-error" id="inb-slug-error" style="display:none;">Required · lowercase letters, digits, hyphens; must be unique within tenant</div>
+            </div>
+            <div class="field" data-validate="inb-name">
+              <label class="field-label">Source name <span class="field-required-tag">required</span></label>
+              <input class="input" id="inb-name" value="Stripe Payments" />
+              <div class="field-error" id="inb-name-error" style="display:none;">Required · 3–80 characters</div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1346,16 +1385,24 @@ const OUT_AUTH = {
     { id:'hmac-alis', icon:'HM', name:'HMAC SHA-256 (ALIS-native)', recommended:true,
       desc:'We sign each request with a shared secret over <code>timestamp.body</code>. Receiver computes the same with the same secret. Header names are configurable.',
       fields:[
-        {kind:'vault', label:'Signing secret', path:'kv/brookside/whk_new/hmac-secret', meta:'ALIS-generated · revealable once · rotatable with grace window'},
-        {kind:'input', label:'Signature header', value:'X-Webhook-Signature', mono:true},
-        {kind:'input', label:'Timestamp header', value:'X-Webhook-Timestamp', mono:true},
+        {kind:'vault', label:'Signing secret', path:'kv/brookside/whk_new/hmac-secret', meta:'ALIS-generated · revealable once · rotatable with grace window', required:true, errorMsg:'Required · paste a secret or click Generate'},
+        {kind:'input', label:'Signature header', value:'X-Webhook-Signature', mono:true, required:true, errorMsg:'Required · header name where signature is sent'},
+        {kind:'input', label:'Timestamp header', value:'X-Webhook-Timestamp', mono:true, required:true, errorMsg:'Required · header name where timestamp is sent (replay defense)'},
         {kind:'select', label:'Timestamp tolerance', options:['5 minutes (recommended)','1 minute (stricter)','15 minutes']}
       ]},
-    { id:'hmac-stripe', icon:'SP', name:'HMAC — Stripe-style', desc:'Single header <code>Stripe-Signature: t=,v1=</code>. Useful when receiver uses a Stripe-compatible verification library.', fields:[{kind:'vault', label:'Signing secret', path:'kv/brookside/whk_new/stripe-style'},{kind:'input', label:'Header', value:'Stripe-Signature', mono:true}]},
-    { id:'hmac-github', icon:'GH', name:'HMAC — GitHub-style', desc:'<code>X-Hub-Signature-256: sha256=...</code> · no timestamp. Replay defense via idempotency only.', fields:[{kind:'vault', label:'Signing secret', path:'kv/brookside/whk_new/github-style'},{kind:'input', label:'Header', value:'X-Hub-Signature-256', mono:true}]},
-    { id:'hmac-slack', icon:'SL', name:'HMAC — Slack-style', desc:'<code>X-Slack-Signature: v0=</code> + <code>X-Slack-Request-Timestamp</code>.', fields:[{kind:'vault', label:'Signing secret', path:'kv/brookside/whk_new/slack-style'}]},
+    { id:'hmac-stripe', icon:'SP', name:'HMAC — Stripe-style', desc:'Single header <code>Stripe-Signature: t=,v1=</code>. Useful when receiver uses a Stripe-compatible verification library.', fields:[
+      {kind:'vault', label:'Signing secret', path:'kv/brookside/whk_new/stripe-style', required:true, errorMsg:'Required · signing secret'},
+      {kind:'input', label:'Header', value:'Stripe-Signature', mono:true, required:true, conditional:'fixed by Stripe convention'}
+    ]},
+    { id:'hmac-github', icon:'GH', name:'HMAC — GitHub-style', desc:'<code>X-Hub-Signature-256: sha256=...</code> · no timestamp. Replay defense via idempotency only.', fields:[
+      {kind:'vault', label:'Signing secret', path:'kv/brookside/whk_new/github-style', required:true, errorMsg:'Required · signing secret'},
+      {kind:'input', label:'Header', value:'X-Hub-Signature-256', mono:true, required:true, conditional:'fixed by GitHub convention'}
+    ]},
+    { id:'hmac-slack', icon:'SL', name:'HMAC — Slack-style', desc:'<code>X-Slack-Signature: v0=</code> + <code>X-Slack-Request-Timestamp</code>.', fields:[
+      {kind:'vault', label:'Signing secret', path:'kv/brookside/whk_new/slack-style', required:true, errorMsg:'Required · Slack signing secret'}
+    ]},
     { id:'asym-rsa', icon:'RP', name:'Asymmetric (public-key) signature', desc:'ALIS generates a key pair. You download the public key (PEM) and share it with the partner. The private key never leaves the secret store.', fields:[
-      {kind:'gen-keys', label:'Key pair', path:'kv/brookside/whk_new/rsa-private', meta:'ALIS-generated; private key never exported.'},
+      {kind:'gen-keys', label:'Key pair', path:'kv/brookside/whk_new/rsa-private', meta:'ALIS-generated; private key never exported.', required:true, errorMsg:'Required · click Generate now to create the key pair'},
       {kind:'select', label:'Signing algorithm', options:['RSA-PSS / SHA-256 (recommended)','RSA-PSS / SHA-384','Ed25519']}
     ]}
   ],
@@ -1363,29 +1410,29 @@ const OUT_AUTH = {
     { id:'oauth2-cc', icon:'OA', name:'OAuth 2.0 client credentials', recommended:true,
       desc:'ALIS fetches a bearer token from your IDP, caches it (refresh 60s before expiry), attaches it to each delivery.',
       fields:[
-        {kind:'input', label:'Token endpoint URL', value:'https://auth.example.com/oauth2/token', mono:true},
-        {kind:'input', label:'Client ID', value:'', mono:true, placeholder:'e.g. alis-webhook-prod'},
-        {kind:'vault', label:'Client secret', path:'kv/brookside/whk_new/oauth-secret'},
+        {kind:'input', label:'Token endpoint URL', value:'https://auth.example.com/oauth2/token', mono:true, required:true, errorMsg:'Required · IDP token endpoint (must be HTTPS)'},
+        {kind:'input', label:'Client ID', value:'', mono:true, placeholder:'e.g. alis-webhook-prod', required:true, errorMsg:'Required · IDP client identifier'},
+        {kind:'vault', label:'Client secret', path:'kv/brookside/whk_new/oauth-secret', required:true, errorMsg:'Required · IDP client secret'},
         {kind:'input', label:'Scope', value:'webhook.deliver', mono:true},
         {kind:'input', label:'Audience / resource', value:'', mono:true, placeholder:'optional', help:'For audience-bound tokens.'},
       ]},
     { id:'azure-ad', icon:'AD', name:'Azure AD service principal', desc:'For receivers behind Entra ID. Supports cert-bound tokens (recommended over secret).', fields:[
-      {kind:'input', label:'Tenant ID', value:'', mono:true, placeholder:'GUID'},
-      {kind:'input', label:'Client ID (App registration)', value:'', mono:true, placeholder:'GUID'},
-      {kind:'select', label:'Auth method', options:['Certificate (recommended)','Client secret','Federated identity (preview)']},
-      {kind:'cert-upload', label:'Certificate + private key (PEM or PFX)', dz:'azure-cert', preview:'azure-cert-preview'},
-      {kind:'input', label:'Audience / resource', value:'api://receiver-app-id', mono:true}
+      {kind:'input', label:'Tenant ID', value:'', mono:true, placeholder:'GUID', required:true, errorMsg:'Required · Azure AD tenant GUID'},
+      {kind:'input', label:'Client ID (App registration)', value:'', mono:true, placeholder:'GUID', required:true, errorMsg:'Required · App registration client GUID'},
+      {kind:'select', label:'Auth method', options:['Certificate (recommended)','Client secret','Federated identity (preview)'], required:true},
+      {kind:'cert-upload', label:'Certificate + private key (PEM or PFX)', dz:'azure-cert', preview:'azure-cert-preview', conditional:'required when Auth method = Certificate', errorMsg:'Required · upload cert + key (or switch to Client secret)'},
+      {kind:'input', label:'Audience / resource', value:'api://receiver-app-id', mono:true, required:true, errorMsg:'Required · audience for token'}
     ]},
     { id:'aws-sigv4', icon:'AW', name:'AWS Signature v4', desc:'Signs every request with cloud credentials per the AWS spec. For receivers fronted by API Gateway with IAM auth.', fields:[
-      {kind:'input', label:'Region', value:'us-east-1', mono:true},
-      {kind:'input', label:'Service name', value:'execute-api', mono:true},
-      {kind:'select', label:'Credential mode', options:['Static access key + secret','Assumed role (recommended)']},
-      {kind:'input', label:'Access key ID', value:'', mono:true, placeholder:'AKIA...'},
-      {kind:'vault', label:'Secret access key', path:'kv/brookside/whk_new/aws-secret', meta:'Prefer scoped IAM roles over long-lived access keys.'},
-      {kind:'input', label:'Role ARN (if assuming)', value:'', mono:true, placeholder:'arn:aws:iam::123456789012:role/...'}
+      {kind:'input', label:'Region', value:'us-east-1', mono:true, required:true, errorMsg:'Required · AWS region'},
+      {kind:'input', label:'Service name', value:'execute-api', mono:true, required:true, errorMsg:'Required · AWS service for SigV4'},
+      {kind:'select', label:'Credential mode', options:['Static access key + secret','Assumed role (recommended)'], required:true},
+      {kind:'input', label:'Access key ID', value:'', mono:true, placeholder:'AKIA...', conditional:'required when mode = Static credentials', errorMsg:'Required · access key (when using static credentials)'},
+      {kind:'vault', label:'Secret access key', path:'kv/brookside/whk_new/aws-secret', meta:'Prefer scoped IAM roles over long-lived access keys.', conditional:'required when mode = Static credentials', errorMsg:'Required · secret access key (when using static credentials)'},
+      {kind:'input', label:'Role ARN', value:'', mono:true, placeholder:'arn:aws:iam::123456789012:role/...', conditional:'required when mode = Assumed role', errorMsg:'Required · IAM role ARN to assume'}
     ]},
     { id:'bearer', icon:'BR', name:'Static bearer token', desc:'Long-lived token in the <code>Authorization: Bearer</code> header. Pair with regular rotation.', fields:[
-      {kind:'vault', label:'Bearer token', path:'kv/brookside/whk_new/bearer'},
+      {kind:'vault', label:'Bearer token', path:'kv/brookside/whk_new/bearer', required:true, errorMsg:'Required · paste the bearer token'},
       {kind:'select', label:'Rotation reminder', options:['Every 90 days (recommended)','Every 30 days','Every 180 days','No reminder']}
     ]},
   ],
@@ -1393,29 +1440,29 @@ const OUT_AUTH = {
     { id:'mtls', icon:'MT', name:'Mutual TLS (mTLS)', recommended:true,
       desc:'We present a client certificate during the TLS handshake. No body-level signing needed. Choose: upload existing material, or have ALIS generate a CSR for your CA to sign.',
       fields:[
-        {kind:'select', label:'Mode', options:['Upload existing certificate + key','Generate CSR (ALIS keeps private key)']},
-        {kind:'cert-upload', label:'Client certificate (PEM or PFX bundle)', dz:'mtls-cert', preview:'mtls-cert-preview', help:'Drop a PEM, CRT, or PFX file. We extract metadata after parsing.'},
-        {kind:'cert-upload', label:'Private key (PEM only — skip if PFX above)', dz:'mtls-key', help:'Optional if PFX bundle was uploaded above (it contains the key).'},
-        {kind:'input', label:'PFX passphrase', value:'', mono:true, placeholder:'(only if PFX uploaded)', type:'password'},
+        {kind:'select', label:'Mode', options:['Upload existing certificate + key','Generate CSR (ALIS keeps private key)'], required:true},
+        {kind:'cert-upload', label:'Client certificate (PEM or PFX bundle)', dz:'mtls-cert', preview:'mtls-cert-preview', help:'Drop a PEM, CRT, or PFX file. We extract metadata after parsing.', required:true, errorMsg:'Required · upload client certificate (PEM or PFX)'},
+        {kind:'cert-upload', label:'Private key (PEM only)', dz:'mtls-key', conditional:'required if cert is PEM (skip for PFX bundle)', help:'Skip if PFX bundle was uploaded above (it contains the key).', errorMsg:'Required · upload PEM private key (or switch to PFX bundle for cert above)'},
+        {kind:'input', label:'PFX passphrase', value:'', mono:true, placeholder:'leave blank if not PFX', type:'password', conditional:'required if PFX file uploaded', errorMsg:'Required · PFX bundle needs the passphrase to extract the key'},
         {kind:'input', label:'Subject CN', value:'alis-webhook-prod', mono:true, help:'Used for monitoring and rotation labels. Read from cert if blank.'},
-        {kind:'select', label:'TLS version floor', options:['TLS 1.3 only (strictest)','TLS 1.2 or higher','TLS 1.2 only']}
+        {kind:'select', label:'TLS version floor', options:['TLS 1.3 only (strictest)','TLS 1.2 or higher','TLS 1.2 only'], required:true}
       ]}
   ],
   other: [
     { id:'basic', icon:'BA', name:'HTTP Basic', warn:true,
       desc:'Username + password in Authorization header. Weakest scheme on this list. Restricted by default for endpoints handling Standard or Restricted PHI.',
       fields:[
-        {kind:'note', kindLabel:'warn', text:'HTTP Basic is the weakest option. Use only if the receiver leaves no other choice. PHI endpoints need explicit compliance approval.'},
-        {kind:'input', label:'Username', value:'', mono:true},
-        {kind:'vault', label:'Password', path:'kv/brookside/whk_new/basic-pw'},
-        {kind:'textarea', label:'Justification (required for activation)', placeholder:'Why this scheme is used despite available stronger alternatives...'}
+        {kind:'note', kindLabel:'warn', text:'HTTP Basic is the weakest option. Use only if the receiver leaves no other choice. PHI endpoints need explicit compliance approval (FR-COMP-4).'},
+        {kind:'input', label:'Username', value:'', mono:true, required:true, errorMsg:'Required · HTTP Basic username'},
+        {kind:'vault', label:'Password', path:'kv/brookside/whk_new/basic-pw', required:true, errorMsg:'Required · HTTP Basic password'},
+        {kind:'textarea', label:'Justification', placeholder:'Why this scheme is used despite available stronger alternatives...', required:true, conditional:'required for activation when PHI sensitivity is Standard or Restricted', errorMsg:'Required for activation · justify why HTTP Basic is acceptable here'}
       ]},
     { id:'ip-only', icon:'IP', name:'IP allowlist only', warn:true,
       desc:'No application-layer auth on the request — the receiver trusts our static egress IPs. Compliance approval required.',
       fields:[
-        {kind:'note', kindLabel:'warn', text:'Compliance officer must approve before activation. Suitable for non-PHI events from legacy receivers only.'},
+        {kind:'note', kindLabel:'warn', text:'Compliance officer must approve before activation (FR-COMP-4). Suitable for non-PHI events from legacy receivers only.'},
         {kind:'input', label:'Our static egress IPs (read-only)', value:'52.149.117.42, 52.149.117.43, 52.149.117.44', mono:true, readonly:true, help:'Stable for the lifetime of this endpoint. Share with the receiver\'s network team.'},
-        {kind:'input', label:'Compliance approval reference', value:'', mono:true, placeholder:'CO-2024-NNN', required:true},
+        {kind:'input', label:'Compliance approval reference', value:'', mono:true, placeholder:'CO-2024-NNN', required:true, conditional:'required for IP-only authentication', errorMsg:'Required · compliance officer approval reference (format CO-YYYY-NNN)'},
         {kind:'textarea', label:'Notes for the approval record', placeholder:'Receiver, scope of events, justification...'}
       ]},
     { id:'composite', icon:'CO', name:'Composite (signature + bearer)', desc:'Belt-and-suspenders. Each scheme\'s headers are applied; if either fails to apply (vault miss, IDP down), the delivery is a ConfigurationError.', fields:[
@@ -1455,39 +1502,53 @@ function renderSchemeConfig(){
     }
   }));
 }
+function tagsFor(f){
+  let tags = '';
+  if (f.required) tags += '<span class="field-required-tag">required</span>';
+  if (f.conditional) tags += `<span class="field-conditional-tag">${f.conditional}</span>`;
+  return tags;
+}
+function errorFor(f){
+  if (!f.required && !f.errorMsg) return '';
+  const msg = f.errorMsg || `Required · ${f.label.toLowerCase()}`;
+  const cls = f.errorKind || ''; // '', 'warn', 'info'
+  // visible by default for required fields with empty value; hidden if value is set
+  const hidden = f.value && f.value.length>0 ? 'style="display:none;"' : (f.required?'':'style="display:none;"');
+  return `<div class="field-error ${cls}" ${hidden}>${msg}</div>`;
+}
 function renderField(f){
   if(f.kind==='input'){
-    return `<div class="field"><label class="field-label">${f.label}${f.required?' <span class="req">·</span>':''}</label><input class="input ${f.mono?'mono':''}" value="${f.value||''}" placeholder="${f.placeholder||''}" ${f.readonly?'readonly':''} type="${f.type||'text'}"/>${f.help?'<div class="field-help">'+f.help+'</div>':''}</div>`;
+    return `<div class="field" data-validate="${f.id||''}"><label class="field-label">${f.label}${tagsFor(f)}</label><input class="input ${f.mono?'mono':''}" value="${f.value||''}" placeholder="${f.placeholder||''}" ${f.readonly?'readonly':''} type="${f.type||'text'}"/>${f.help?'<div class="field-help">'+f.help+'</div>':''}${errorFor(f)}</div>`;
   }
   if(f.kind==='select'){
-    return `<div class="field"><label class="field-label">${f.label}</label><select class="select">${f.options.map(o=>'<option>'+o+'</option>').join('')}</select>${f.help?'<div class="field-help">'+f.help+'</div>':''}</div>`;
+    return `<div class="field"><label class="field-label">${f.label}${tagsFor(f)}</label><select class="select">${f.options.map(o=>'<option>'+o+'</option>').join('')}</select>${f.help?'<div class="field-help">'+f.help+'</div>':''}${errorFor(f)}</div>`;
   }
   if(f.kind==='textarea'){
-    return `<div class="field"><label class="field-label">${f.label}</label><textarea class="input textarea" placeholder="${f.placeholder||''}"></textarea></div>`;
+    return `<div class="field"><label class="field-label">${f.label}${tagsFor(f)}</label><textarea class="input textarea" placeholder="${f.placeholder||''}"></textarea>${f.help?'<div class="field-help">'+f.help+'</div>':''}${errorFor(f)}</div>`;
   }
   if(f.kind==='vault'){
-    return `<div class="field"><label class="field-label">${f.label}</label><div class="vault-ref"><div class="vault-ref-lock"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="2.5" y="6" width="9" height="6.5" rx="1" stroke="currentColor" stroke-width="1.2"/><path d="M4.5 6V4a2.5 2.5 0 015 0v2" stroke="currentColor" stroke-width="1.2"/></svg></div><div class="vault-ref-body"><div class="vault-ref-path">${f.path}</div><div class="vault-ref-meta">${f.meta||'Stored encrypted · paste to set value · revealable once'}</div></div><button class="btn btn-ghost btn-sm" data-action="paste-secret">Paste</button></div></div>`;
+    return `<div class="field"><label class="field-label">${f.label}${tagsFor(f)}</label><div class="vault-ref"><div class="vault-ref-lock"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="2.5" y="6" width="9" height="6.5" rx="1" stroke="currentColor" stroke-width="1.2"/><path d="M4.5 6V4a2.5 2.5 0 015 0v2" stroke="currentColor" stroke-width="1.2"/></svg></div><div class="vault-ref-body"><div class="vault-ref-path">${f.path}</div><div class="vault-ref-meta">${f.meta||'Stored encrypted · paste to set value · revealable once'}</div></div><button class="btn btn-ghost btn-sm" data-action="paste-secret">Paste</button></div>${f.help?'<div class="field-help">'+f.help+'</div>':''}${errorFor(f)}</div>`;
   }
   if(f.kind==='cert-upload'){
-    return `<div class="field"><label class="field-label">${f.label}</label>
+    return `<div class="field"><label class="field-label">${f.label}${tagsFor(f)}</label>
       <div class="dropzone" data-dz="${f.dz||'cert'}" ${f.preview?'data-preview-target="'+f.preview+'"':''}>
         <input type="file" accept=".pem,.crt,.cer,.pfx,.p12,.key" />
         <div class="dropzone-icon">⬆</div>
         <div class="dropzone-title">Drop file or click to upload</div>
-        <div class="dropzone-help">PEM, CRT, CER, PFX, P12, or KEY</div>
+        <div class="dropzone-help">PEM, CRT, CER, PFX, P12, or KEY · validated synchronously on upload (§5.9.2)</div>
       </div>
       ${f.preview?'<div id="'+f.preview+'" class="mt-3"></div>':''}
-      ${f.help?'<div class="field-help">'+f.help+'</div>':''}</div>`;
+      ${f.help?'<div class="field-help">'+f.help+'</div>':''}${errorFor(f)}</div>`;
   }
   if(f.kind==='gen-keys'){
-    return `<div class="field"><label class="field-label">${f.label}</label>
+    return `<div class="field"><label class="field-label">${f.label}${tagsFor(f)}</label>
       <div class="vault-ref"><div class="vault-ref-lock">⚿</div><div class="vault-ref-body"><div class="vault-ref-path">${f.path}</div><div class="vault-ref-meta">${f.meta}</div></div>
         <button class="btn btn-sm" data-action="gen-keys" data-target="gen-keys-result">Generate now</button>
       </div>
-      <div id="gen-keys-result" class="mt-3"></div></div>`;
+      <div id="gen-keys-result" class="mt-3"></div>${errorFor(f)}</div>`;
   }
   if(f.kind==='button'){
-    return `<div class="field"><label class="field-label">${f.label}</label><div><button class="btn">${f.text}</button></div></div>`;
+    return `<div class="field"><label class="field-label">${f.label}${tagsFor(f)}</label><div><button class="btn">${f.text}</button></div></div>`;
   }
   if(f.kind==='note'){
     const cls=f.kindLabel==='warn'?'warn':f.kindLabel==='info'?'info':'';
@@ -1502,53 +1563,53 @@ renderAuthTabs(); renderSchemeList(); renderSchemeConfig();
 const IN_VERIFY = {
   signature: [
     { id:'hmac-stripe', icon:'SP', name:'Stripe-compatible HMAC SHA-256', desc:'Verifies <code>Stripe-Signature: t=,v1=</code>. Replay defense via timestamp tolerance + idempotency on <code>$.id</code>.', fields:[
-      {kind:'vault', label:'Stripe webhook signing secret', path:'kv/brookside/inb_new/stripe-whsec', meta:'Paste the <code>whsec_</code> value from Stripe dashboard'},
-      {kind:'select', label:'Timestamp tolerance', options:['5 minutes (Stripe default)','1 minute (stricter)','15 minutes']},
+      {kind:'vault', label:'Stripe webhook signing secret', path:'kv/brookside/inb_new/stripe-whsec', meta:'Paste the <code>whsec_</code> value from Stripe dashboard', required:true, errorMsg:'Required · paste the whsec_ value from Stripe dashboard'},
+      {kind:'select', label:'Timestamp tolerance', options:['5 minutes (Stripe default)','1 minute (stricter)','15 minutes'], required:true},
       {kind:'select', label:'Allowed IPs', options:['Use Stripe\'s published ranges','No IP restriction','Custom range']}
     ]},
     { id:'hmac-github', icon:'GH', name:'GitHub HMAC SHA-256', desc:'Verifies <code>X-Hub-Signature-256: sha256=</code>. No timestamp; replay defense via dedupe on <code>X-GitHub-Delivery</code>.', fields:[
-      {kind:'vault', label:'Webhook secret', path:'kv/brookside/inb_new/github-whsec'},
+      {kind:'vault', label:'Webhook secret', path:'kv/brookside/inb_new/github-whsec', required:true, errorMsg:'Required · webhook secret from GitHub repo/org settings'},
       {kind:'select', label:'Allowed IPs', options:['Use GitHub\'s published ranges','No restriction']}
     ]},
     { id:'hmac-twilio', icon:'TW', name:'Twilio HMAC SHA-1', desc:'Twilio signs URL + sorted form params (not raw body). Form-encoded body parsed before dispatch.', fields:[
-      {kind:'vault', label:'Twilio account auth token', path:'kv/brookside/inb_new/twilio-auth'},
+      {kind:'vault', label:'Twilio account auth token', path:'kv/brookside/inb_new/twilio-auth', required:true, errorMsg:'Required · Twilio account auth token'},
       {kind:'select', label:'Allowed IPs', options:['Use Twilio\'s published ranges','No restriction']}
     ]},
     { id:'hmac-slack', icon:'SL', name:'Slack HMAC SHA-256 (versioned)', desc:'Verifies <code>X-Slack-Signature: v0=</code> with timestamp. Auto-responds to url_verification challenges.', fields:[
-      {kind:'vault', label:'Slack signing secret', path:'kv/brookside/inb_new/slack-secret'},
-      {kind:'select', label:'Timestamp tolerance', options:['5 minutes (Slack default)','1 minute']}
+      {kind:'vault', label:'Slack signing secret', path:'kv/brookside/inb_new/slack-secret', required:true, errorMsg:'Required · Slack signing secret'},
+      {kind:'select', label:'Timestamp tolerance', options:['5 minutes (Slack default)','1 minute'], required:true}
     ]}
   ],
   token: [
     { id:'jwt-jwks', icon:'JW', name:'JWT-bearer with JWKS', recommended:true,
       desc:'Partner sends a JWT in <code>Authorization: Bearer</code>. We fetch their public keys from JWKS, verify signature, check audience and expiry.',
       fields:[
-        {kind:'input', label:'JWKS URL', value:'https://login.salesforce.com/id/keys', mono:true},
+        {kind:'input', label:'JWKS URL', value:'https://login.salesforce.com/id/keys', mono:true, required:true, errorMsg:'Required · partner\'s JWKS endpoint (HTTPS)'},
         {kind:'button', label:'Test JWKS reachability', text:'Fetch and validate now'},
-        {kind:'input', label:'Expected audience (aud)', value:'', mono:true, placeholder:'e.g. https://hooks.alis.health/brookside', required:true},
+        {kind:'input', label:'Expected audience (aud)', value:'', mono:true, placeholder:'e.g. https://hooks.alis.health/brookside', required:true, errorMsg:'Required · expected audience claim'},
         {kind:'input', label:'Expected issuer (iss)', value:'', mono:true, placeholder:'optional · adds defense-in-depth'},
-        {kind:'select', label:'Expiry skew tolerance', options:['5 minutes (default)','1 minute (stricter)','15 minutes']},
-        {kind:'select', label:'JWKS refresh interval', options:['1 hour (default)','15 minutes','6 hours']}
+        {kind:'select', label:'Expiry skew tolerance', options:['5 minutes (default)','1 minute (stricter)','15 minutes'], required:true},
+        {kind:'select', label:'JWKS refresh interval', options:['1 hour (default)','15 minutes','6 hours'], required:true}
       ]},
     { id:'api-key', icon:'AK', name:'API key in header', desc:'Static secret compared with constant-time equality. No body integrity. Pair with IP allowlist for PHI sources.', fields:[
       {kind:'note', kindLabel:'warn', text:'API-key-only is restricted for sources handling Standard or Restricted PHI. Pair with IP allowlist via Composite below, or record a compliance approval.'},
-      {kind:'input', label:'Header name', value:'X-API-Key', mono:true},
-      {kind:'vault', label:'Expected secret', path:'kv/brookside/inb_new/api-key'}
+      {kind:'input', label:'Header name', value:'X-API-Key', mono:true, required:true, errorMsg:'Required · header where partner sends the key'},
+      {kind:'vault', label:'Expected secret', path:'kv/brookside/inb_new/api-key', required:true, errorMsg:'Required · expected API key value'}
     ]}
   ],
   transport: [
     { id:'mtls-in', icon:'MT', name:'Mutual TLS verification', desc:'Partner presents a client cert at TLS handshake; our terminator verifies the chain. No application-layer signing needed.', fields:[
-      {kind:'cert-upload', label:'Partner\'s expected client cert (or trusted CA)', dz:'inb-mtls', preview:'inb-mtls-preview'},
-      {kind:'input', label:'Expected subject CN', value:'', mono:true, placeholder:'CN bound to partner identity', required:true},
+      {kind:'cert-upload', label:'Partner\'s expected client cert (or trusted CA chain)', dz:'inb-mtls', preview:'inb-mtls-preview', required:true, errorMsg:'Required · upload partner\'s expected client cert or CA chain (PEM)'},
+      {kind:'input', label:'Expected subject CN', value:'', mono:true, placeholder:'CN bound to partner identity', required:true, errorMsg:'Required · subject CN to bind cert to partner identity'},
       {kind:'input', label:'Expected key usage extensions', value:'digitalSignature, clientAuth', mono:true}
     ]}
   ],
   other: [
     { id:'ip-allow', icon:'IP', name:'IP allowlist only', warn:true, desc:'No per-request auth — pure network-level trust. Compliance approval required.', fields:[
-      {kind:'note', kindLabel:'warn', text:'Requires compliance approval. Use only for non-PHI events from legacy partners.'},
-      {kind:'textarea', label:'Allowed IPs / CIDRs (one per line)', placeholder:'52.149.117.0/24\n203.0.113.0/24'},
-      {kind:'input', label:'Compliance approval reference', value:'', mono:true, placeholder:'CO-2024-NNN', required:true},
-      {kind:'select', label:'X-Forwarded-For trust policy', options:['Trust only from known proxy','Do not trust XFF','Trust XFF unconditionally (dangerous)']}
+      {kind:'note', kindLabel:'warn', text:'Requires compliance approval (FR-COMP-4). Use only for non-PHI events from legacy partners.'},
+      {kind:'textarea', label:'Allowed IPs / CIDRs (one per line)', placeholder:'52.149.117.0/24\n203.0.113.0/24', required:true, errorMsg:'Required · at least one IP/CIDR'},
+      {kind:'input', label:'Compliance approval reference', value:'', mono:true, placeholder:'CO-2024-NNN', required:true, conditional:'required for IP-only verification', errorMsg:'Required · compliance officer approval reference'},
+      {kind:'select', label:'X-Forwarded-For trust policy', options:['Trust only from known proxy','Do not trust XFF','Trust XFF unconditionally (dangerous)'], required:true}
     ]},
     { id:'composite', icon:'CO', name:'Composite (multiple checks)', desc:'Every configured check must pass. Most-specific failure determines the rejection reason.', fields:[
       {kind:'note', kindLabel:'info', text:'Common composites: Signature + IP allowlist; API key + IP allowlist; mTLS + JWT (transport identity + application identity).'},
@@ -1727,6 +1788,7 @@ function openEventPicker(targetSummary){
         document.getElementById('prev-events').textContent=picked.length+' selected';
       }
       toast('Subscribed to '+picked.length+' event'+(picked.length===1?'':'s'),'ok');
+      setTimeout(()=>Validator.run(), 30);
     }
   });
   const list=document.getElementById('evt-list');
@@ -1758,6 +1820,141 @@ document.querySelectorAll('[data-idem]').forEach(b=>b.addEventListener('click',(
     else cfg.innerHTML='<div class="field"><label class="field-label">Form field name</label><input class="input mono" value="MessageSid"/></div>';
   }
 }));
+
+/* ========== Validation engine ========== */
+const Validator = {
+  // Per-field rules: { id, validate(value)→{ok, msg}, sectionStep, label }
+  rules: [
+    {id:'ob-name', label:'Endpoint name', sectionStep:1, validate:v=>v && v.trim().length>=3 && v.length<=80 ? {ok:true} : {ok:false, msg:'Required · 3–80 characters'}},
+    {id:'ob-url',  label:'Endpoint URL',  sectionStep:2, validate:v=>{
+      if(!v) return {ok:false, msg:'Required · destination URL'};
+      try { const u=new URL(v); if(u.protocol!=='https:' && !(u.protocol==='http:' && (u.hostname==='localhost'||u.hostname==='127.0.0.1'||u.hostname==='::1'))) return {ok:false, msg:'Must be HTTPS, or http://localhost for development only'}; return {ok:true}; }
+      catch(e) { return {ok:false, msg:'Required · malformed URL'}; }
+    }},
+    {id:'ob-events-summary', label:'Subscribed events', sectionStep:4, validate:v=>v && /\d+ event/.test(v) ? {ok:true} : {ok:false, msg:'Required · subscribe to at least one event type'}, readType:'text'},
+    {id:'inb-name', label:'Source name', sectionStep:2, validate:v=>v && v.trim().length>=3 && v.length<=80 ? {ok:true} : {ok:false, msg:'Required · 3–80 characters'}},
+    {id:'inb-slug', label:'Path slug',   sectionStep:2, validate:v=>v && /^[a-z0-9][a-z0-9-]{1,40}$/.test(v) ? {ok:true} : {ok:false, msg:'Required · lowercase letters, digits, hyphens · 2–40 chars'}},
+  ],
+
+  // Run all rules and update DOM (errors visible/hidden, input borders, section badges, activate buttons)
+  run() {
+    // Scope to the active screen so totals reflect just the wizard you're looking at.
+    const activeScreen = document.querySelector('[data-screen].active');
+    const inActiveScreen = el => activeScreen && activeScreen.contains(el);
+
+    let allOk = true;
+    const sectionStatus = new Map(); // step → {required, missing}
+    this.rules.forEach(r=>{
+      const el = document.getElementById(r.id);
+      if(!el || !inActiveScreen(el)) return;
+      const value = r.readType==='text' ? (el.textContent || '') : (el.value || '');
+      const res = r.validate(value);
+      const errEl = document.getElementById(r.id+'-error');
+      if(res.ok) {
+        if(errEl) errEl.style.display='none';
+        if(el.classList) el.classList.remove('invalid');
+      } else {
+        allOk = false;
+        if(errEl) { errEl.textContent = res.msg; errEl.style.display='flex'; }
+        if(el.classList) el.classList.add('invalid');
+      }
+      const s = sectionStatus.get(r.sectionStep) || {required:0, missing:0};
+      s.required++; if(!res.ok) s.missing++;
+      sectionStatus.set(r.sectionStep, s);
+    });
+
+    if(!this.validateSchemeFields(sectionStatus, activeScreen)) allOk = false;
+
+    this.updateSectionBadges(sectionStatus, activeScreen);
+    this.updateActivateState(allOk, sectionStatus, activeScreen);
+    return allOk;
+  },
+
+  validateSchemeFields(sectionStatus, activeScreen) {
+    let allOk = true;
+    const scope = activeScreen || document;
+    scope.querySelectorAll('[data-step] .field').forEach(field=>{
+      const required = field.querySelector('.field-required-tag');
+      if(!required) return;
+      const input = field.querySelector('input, textarea, select');
+      const errEl = field.querySelector('.field-error');
+      const sectionEl = field.closest('[data-step]');
+      const step = sectionEl ? Number(sectionEl.dataset.step) : 0;
+      if(!input || !errEl) return;
+      if(input.id && this.rules.some(r=>r.id===input.id)) return;
+      const value = input.tagName==='SELECT' ? input.value : (input.value || '').trim();
+      const ok = !!value;
+      if(!ok) allOk = false;
+      const s = sectionStatus.get(step) || {required:0, missing:0};
+      s.required++; if(!ok) s.missing++;
+      sectionStatus.set(step, s);
+      if(ok) { errEl.style.display='none'; input.classList.remove('invalid'); }
+      else { errEl.style.display='flex'; input.classList.add('invalid'); }
+    });
+    return allOk;
+  },
+
+  updateSectionBadges(sectionStatus, activeScreen) {
+    const scope = activeScreen || document;
+    scope.querySelectorAll('.form-section[data-step]').forEach(section=>{
+      const step = Number(section.dataset.step);
+      const titleH2 = section.querySelector('.form-section-titles h2');
+      if(!titleH2) return;
+      let badge = titleH2.querySelector('.section-status');
+      const s = sectionStatus.get(step);
+      if(!s || s.required===0) {
+        // No tracked required fields here; render nothing or "OK"
+        if(badge) badge.remove();
+        return;
+      }
+      if(!badge) { badge = document.createElement('span'); titleH2.appendChild(badge); }
+      if(s.missing===0) {
+        badge.className='section-status ok';
+        badge.textContent='✓ complete';
+        section.classList.add('done'); section.classList.remove('active');
+        const num = section.querySelector('.form-section-num'); if(num) num.textContent='✓';
+      } else {
+        badge.className='section-status missing';
+        badge.textContent=s.missing+' required';
+        section.classList.remove('done');
+      }
+    });
+  },
+
+  updateActivateState(allOk, sectionStatus, activeScreen) {
+    const scope = activeScreen || document;
+    const totalMissing = Array.from(sectionStatus.values()).reduce((a,s)=>a+s.missing,0);
+    const totalRequired = Array.from(sectionStatus.values()).reduce((a,s)=>a+s.required,0);
+    scope.querySelectorAll('[data-action="activate-outbound"], [data-action="activate-inbound"]').forEach(btn=>{
+      btn.disabled = !allOk;
+      btn.title = allOk ? '' : `${totalMissing} required field${totalMissing===1?'':'s'} unfilled`;
+    });
+    scope.querySelectorAll('.action-bar-left').forEach(bar=>{
+      const completed = totalRequired - totalMissing;
+      const pillText = totalMissing===0 ? 'Ready to activate' : `${completed} of ${totalRequired} required fields`;
+      const pillCls = totalMissing===0 ? 'pill ok' : 'pill warn';
+      const reason = totalMissing===0 ? '' : `· ${totalMissing} missing`;
+      bar.innerHTML = `<span class="${pillCls}">${pillText}</span><span>${reason}</span>`;
+    });
+  },
+};
+
+// Live validation: re-run on any input change
+['input','change'].forEach(ev=>document.body.addEventListener(ev, e=>{
+  if(e.target.matches('input, textarea, select')) Validator.run();
+}, true));
+
+// Initial run after a brief delay (give renderField a chance to populate)
+setTimeout(()=>Validator.run(), 50);
+window.Validator = Validator;
+
+/* Hook validation onto scheme/provider re-renders via a MutationObserver
+   on the dynamic config containers — simpler than reassigning declared functions. */
+['scheme-config','inb-verify-config'].forEach(id=>{
+  const el = document.getElementById(id); if(!el) return;
+  new MutationObserver(()=>setTimeout(()=>Validator.run(),20)).observe(el, {childList:true, subtree:true});
+});
+document.querySelectorAll('.provider-card[data-provider]').forEach(c=>c.addEventListener('click',()=>setTimeout(()=>Validator.run(),50)));
 
 /* ========== Activate buttons ========== */
 document.querySelector('[data-action="activate-outbound"]')?.addEventListener('click',()=>{
