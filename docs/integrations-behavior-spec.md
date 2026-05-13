@@ -214,6 +214,8 @@ Inbound sources or outbound endpoints that use IP-allowlist-only (no signature, 
 
 The framework shall support these categories of authentication for outbound deliveries. Each category is a behavioral contract describing what the operator configures, what the system does observably, how rotation works, and how it can fail. Implementations choose specific algorithms and libraries; the spec constrains *what the operator picks from* and *what the system does as a result*.
 
+**This catalog enumerates universal authentication patterns, not vendors.** Vendor names that appear in the descriptions below (Stripe, GitHub, Slack, Twilio, Azure AD, AWS, Salesforce, etc.) name *templates* — pre-filled parameterizations of one of these universal patterns (a particular header convention, a particular signature format, a particular IDP shape, a particular cloud-credential format). An implementation that supports the universal pattern automatically supports every vendor whose convention parameterizes that pattern. The dashboard surfaces vendor names because operators recognize "Stripe-style HMAC" faster than they recognize "shared-secret signature with versioned single-header `t=,v1=` format" — but the spec contract lives at the universal-pattern level. Adding a new vendor template requires no behavioral change; it is operator-facing UX only.
+
 The dashboard shall present these categories grouped under headings like *Signature*, *Token*, *Transport*, *Other*. Each scheme shows a short description, a "recommended" badge where applicable, and a per-scheme configuration form when selected.
 
 #### 5.7.1 Shared-secret signature (symmetric, HMAC family)
@@ -250,19 +252,18 @@ The dashboard shall present these categories grouped under headings like *Signat
 
 **Failure modes.** Receiver returns 401 → ConfigurationError. Token expired at the partner's side without rotation → manifests as 401.
 
-#### 5.7.4 Token from identity provider (OAuth 2.0 family)
+#### 5.7.4 Dynamic bearer credential via OAuth 2.0
 
-**Operator inputs.** Token endpoint URL, client identifier, client credential reference (secret or certificate), optional scope, optional resource/audience, optional sub-variant selector (Standard OAuth 2.0 client credentials / Azure AD service principal / AWS Signature v4 / other supported variants).
+**Operator inputs.** Token endpoint URL, client identifier, client credential reference (secret or certificate), optional scope, optional resource/audience, optional template selector.
 
-**Behavior.** The framework requests a token from the identity provider using the configured credentials. Tokens are cached for their declared lifetime, refreshed before expiry with a safety margin (default: refresh when 60 seconds remain on the token). Each outbound request attaches the cached token as a bearer token in the Authorization header. Token refresh is invisible to the operator under normal operation; the dashboard exposes the cache state for diagnostic purposes.
+**Behavior.** The framework requests a token from the identity provider using the configured credentials per the OAuth 2.0 client-credentials grant. Tokens are cached for their declared lifetime, refreshed before expiry with a safety margin (default: refresh when 60 seconds remain). Each outbound request attaches the cached token as a bearer token in the Authorization header. Token refresh is invisible to the operator under normal operation; the dashboard exposes the cache state for diagnostic purposes.
 
-**Sub-variants.** The framework distinguishes:
+**Templates that parameterize this pattern.**
 - *Standard OAuth 2.0 client credentials* — generic IDP, configured by URL.
-- *Azure AD service principal* — adds Azure tenant ID, supports certificate-bound tokens and federated identity, has its own diagnostic surface.
-- *AWS Signature v4* — does not fetch a token; signs every request with cloud credentials per the cloud provider's signing spec. Configured with region, service name, access key, secret key reference (or assumed role).
-- *Other provider-specific protocols* may be added when the user-visible inputs and behavior differ enough to warrant a distinct option (e.g., GCP service account signed JWT).
+- *Azure AD service principal* — adds Azure tenant ID, supports certificate-bound tokens and federated identity.
+- *Other IDP-specific templates* (Auth0, Okta, Cognito, Keycloak, etc.) may be added when the user-visible inputs differ enough to warrant a distinct template.
 
-The framework shall surface these as separate options because their configuration surfaces, failure modes, and operator vocabulary differ — collapsing them under one "OAuth-ish" label confuses operators and produces wrong configurations.
+The framework distinguishes templates because their configuration surfaces differ; the underlying behavior — fetch token, cache, attach as bearer — is the same OAuth 2.0 pattern.
 
 **Rotation.** Client credentials are rotated per FR-OUT-4. Token refresh is automatic.
 
@@ -273,7 +274,29 @@ The framework shall surface these as separate options because their configuratio
 - Cached token expired between fetch and partner request (clock skew): → automatic refetch, transparent to operator.
 - Token rejected by receiver (401/403): → distinguish from IDP failures — manifest as ConfigurationError after the second consecutive receiver-401 within a short window.
 
-#### 5.7.5 Mutual TLS (mTLS)
+#### 5.7.5 Cloud-provider request signing
+
+**Operator inputs.** Cloud-provider template selector (AWS, GCP, Azure, etc.); region or scope; service or resource identifier; credential mode (static credentials, assumed role, workload identity); credential references.
+
+**Behavior.** Unlike OAuth, no token is fetched and cached for application use. Every outbound request is signed inline with the cloud provider's canonical-request signing algorithm using the configured credentials. The receiver — typically an API gateway fronted by the cloud's IAM — verifies the signature against the same credentials at request time.
+
+**Templates that parameterize this pattern.**
+- *AWS Signature v4* — canonical request → string-to-sign → HMAC chain with the secret access key, presented in the `Authorization` header (or query parameters). Configured with region, service, access key + secret OR assumed role (STS).
+- *GCP signed URLs / signed JWTs* — request signed with a service-account key.
+- *Azure SAS tokens* — request signed with a shared access signature derived from a storage or service key.
+
+Each cloud's algorithm differs in canonicalization steps and signing-key derivation; the universal shape — sign every request with cloud credentials — is the same.
+
+**When to use.** Receivers fronted by cloud IAM that does not accept generic bearer tokens.
+
+**Rotation.** Rotate cloud credentials per the cloud provider's mechanism (AWS access-key rotation, GCP service-account-key rotation, Azure SAS regeneration). Assumed-role / workload-identity modes rotate transparently as the underlying short-lived credentials refresh; the framework treats this as a routine refetch.
+
+**Failure modes.**
+- Credentials unreadable from secret store: → ConfigurationError.
+- Cloud IAM rejects signature (clock skew, expired credential, revoked role): → ConfigurationError; not retried.
+- Receiver returns non-IAM 4xx (5xx from the application behind the gateway): → Retrying.
+
+#### 5.7.6 Mutual TLS (mTLS)
 
 **Operator inputs.** A client certificate and its private key. The framework shall accept upload in two formats: PEM-encoded certificate file plus PEM-encoded key file, or a PFX/PKCS#12 bundle with a passphrase. Optional inputs: subject Common Name (for monitoring labels), TLS version floor (default: TLS 1.2 minimum, TLS 1.3 preferred).
 
@@ -290,7 +313,7 @@ The framework shall surface these as separate options because their configuratio
 - Partner does not trust our cert chain: → TlsHandshakeFailed (a typed sub-case of FailureReason that distinguishes from generic timeouts).
 - Private key unreadable from secret store: → ConfigurationError.
 
-#### 5.7.6 HTTP Basic
+#### 5.7.7 HTTP Basic
 
 **Operator inputs.** Username and password.
 
@@ -300,7 +323,7 @@ The framework shall surface these as separate options because their configuratio
 
 **Rotation.** Credential change with optional grace window.
 
-#### 5.7.7 IP allowlist only (no application-layer authentication)
+#### 5.7.8 IP allowlist only (no application-layer authentication)
 
 **Operator inputs.** A documented compliance approval reference. The dashboard displays the framework's static egress IPs for the operator to share with the partner.
 
@@ -310,7 +333,7 @@ The framework shall surface these as separate options because their configuratio
 
 **Rotation.** Not applicable to authentication; the egress IPs are infrastructure-level. Egress IP changes are coordinated as a separate operations concern with notice to all affected operators.
 
-#### 5.7.8 Composite
+#### 5.7.9 Composite
 
 **Operator inputs.** Configure two or more of the above schemes.
 
@@ -324,7 +347,9 @@ The framework shall surface these as separate options because their configuratio
 
 ### 5.8 Inbound — verification methods catalog
 
-Mirror of §5.8 for inbound. Each verification scheme maps to a category of partner authentication; partner-specific templates pre-fill the conventions. As above, the dashboard groups schemes by category.
+Mirror of §5.7 for inbound. Each verification scheme maps to a category of partner authentication; partner-specific templates pre-fill the conventions. As above, the dashboard groups schemes by category.
+
+**The same universal-patterns rule from §5.7 applies here.** The catalog enumerates patterns (HMAC, JWT, mTLS, API key, IP allowlist, composite); vendor names that appear (Stripe, GitHub, Twilio, Slack, Salesforce, etc.) name *templates* that pre-fill a pattern's parameterization — header convention, signature format, idempotency-key location, JWKS URL shape. An implementation that supports the universal pattern automatically supports every vendor whose convention parameterizes that pattern. Templates exist as operator-facing UX shortcuts; they do not change behavior or add new contracts.
 
 #### 5.8.1 Shared-secret signature verification (HMAC family)
 
