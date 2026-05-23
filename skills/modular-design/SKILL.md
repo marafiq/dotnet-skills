@@ -8,8 +8,8 @@ description: >
   user asks "how should I split this into modules", "what should this
   module be called", "should this be a separate project", or any
   topology-shaping question. Status: placeholder — uses the orchestrator's
-  working summary until deep content is written. Applies to the dotnet-10
-  plugin (.NET 10 / C# 14 / ASP.NET Core MVC 10).
+  working summary until deep content is written. Target stack: .NET 10 /
+  C# 14 / ASP.NET Core MVC 10.
 ---
 
 # modular-design

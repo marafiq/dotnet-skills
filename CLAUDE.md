@@ -1,9 +1,11 @@
 # CLAUDE.md — dotnet-skills
 
-Claude Code marketplace hosting **two plugins** for C#/.NET work. Users install only the runtime they actually ship to:
+Flat library of C#/.NET skills, installable in two agent runtimes from the same `SKILL.md` files:
 
-- **`dotnet-48`** — ASP.NET MVC 5.3, Web Forms, EF6 on **.NET Framework 4.8** with **C# 8.0** (compiler subset; see caveats below). Includes migration patterns toward ASP.NET Core.
-- **`dotnet-10`** — ASP.NET Core MVC, EF Core on **.NET 10** with **C# 14**.
+- **Claude Code** — installed as the `dotnet` plugin from the `dotnet-skills` marketplace. Skills auto-discovered from `./skills/` at the repo root.
+- **OpenAI Codex CLI** — installed via `scripts/install-codex.sh`, which symlinks every `skills/<name>/` folder into `~/.agents/skills/` (or `<repo>/.agents/skills/` for per-repo installs).
+
+There is no `dotnet-48` vs `dotnet-10` directory split. Skills live flat under `./skills/`; each skill's *description* declares its target stack. The legacy stack (ASP.NET MVC 5.3 + Web Forms + EF6 on .NET Framework 4.8 / C# 8.0) and the modern stack (ASP.NET Core MVC + EF Core on .NET 10 / C# 14) are both in-scope.
 
 ## Editorial standards (read first)
 
@@ -55,17 +57,20 @@ When concision and precision conflict, pay the words for precision.
 - We work in Senior Living Industry and people rely on our software thus you must act as a responsible engineer with extreme ownership on agreed goals.
 - A rigid mindset that accepts mediocre results is not a good thing, excellence comes from practicing small things at all times, and it goes long way. If there is a fix that will have impact on the code, and is small enough should be done, commit or long session should not be used as an excuse.
 
-## Scope per plugin
+## Scope
 
-### `dotnet-48`
-Target: **.NET Framework 4.8** with **C# 8.0** (set `<LangVersion>8.0</LangVersion>` in csproj).
+Both stacks are in-scope, flat. Each skill names its own target in the description; the directory does not carry a stack tag.
+
+### Legacy stack — .NET Framework 4.8 with C# 8.0
+
+Set `<LangVersion>8.0</LangVersion>` in csproj when targeting this stack.
 
 In:
 - ASP.NET MVC 5.3 — `System.Web`, `Global.asax`, `Web.config`, jQuery Unobtrusive AJAX
 - ASP.NET Web Forms — `.aspx`, code-behind, ViewState, page lifecycle, server controls
 - Entity Framework 6.x
 - Cross-cutting on this stack: testing, validation, identity (OWIN / `System.Web` / Membership), logging, caching, error handling
-- Migration patterns toward `dotnet-10`
+- Migration patterns toward the modern stack
 
 **C# 8 caveat.** On `net48`, C# 8 features split three ways:
 - **Compiler-only — work as-is**: switch expressions, nullable reference types, pattern matching, `using` declarations, static local functions, readonly members, null-coalescing assignment.
@@ -74,123 +79,143 @@ In:
 
 Skills that demonstrate C# 8 features must declare which bucket the feature falls in and what NuGet polyfills (if any) the user needs.
 
-### `dotnet-10`
-Target: **.NET 10** with **C# 14**.
+### Modern stack — .NET 10 with C# 14
 
 In:
 - ASP.NET Core MVC 10 — `Program.cs`, endpoint routing, built-in DI and configuration, middleware pipeline
 - Entity Framework Core 10
 - Cross-cutting on this stack: xUnit / NUnit, FluentValidation / data annotations, ASP.NET Core Identity, `ILogger<T>`, `IMemoryCache` / `IDistributedCache`, ProblemDetails error handling
 
-### Out of scope (both plugins)
-Blazor (Server / WebAssembly), Razor Pages, desktop UI (WPF, WinForms, MAUI, Avalonia, Uno), F#, VB.NET, Unity, Godot, Xamarin. These are .NET-ecosystem but stylistically far enough from MVC-style web work to need their own plugins later if anyone wants them.
+### Out of scope
+
+Blazor (Server / WebAssembly), Razor Pages, desktop UI (WPF, WinForms, MAUI, Avalonia, Uno), F#, VB.NET, Unity, Godot, Xamarin. These are .NET-ecosystem but stylistically far enough from MVC-style web work to need their own libraries.
 
 ## Layout
 
 ```
 .claude-plugin/
-  marketplace.json            # lists both plugins
-plugins/
-  dotnet-48/
-    .claude-plugin/
-      plugin.json
-    skills/<name>/
-      SKILL.md
-      references/             # optional, used for MVC 5 ↔ Web Forms variant split inside this plugin
-      scripts/, assets/       # optional
-    [agents/, commands/, hooks/, .mcp.json — at plugin root if used]
-  dotnet-10/
-    .claude-plugin/
-      plugin.json
-    skills/<name>/
-      SKILL.md
-      [references/, scripts/, assets/]
-    [agents/, commands/, hooks/, .mcp.json — at plugin root if used]
+  marketplace.json     # Claude Code marketplace; lists one plugin
+  plugin.json          # Claude Code plugin manifest (plugin name: "dotnet")
+skills/                # FLAT — every skill is a peer here
+  <name>/
+    SKILL.md           # required
+    references/        # optional long-form docs
+    scripts/           # optional executable helpers (e.g. .csx)
+    assets/            # optional templates / data
+scripts/
+  install-codex.sh     # links every skills/<name>/ into ~/.agents/skills/
+AGENTS.md              # Codex-facing pointer
+CLAUDE.md              # this file
+README.md              # user-facing install + skill index
+[agents/, commands/, hooks/, .mcp.json — at repo root if/when added]
 ```
 
-`.claude-plugin/` directories hold **only** manifests. Components are auto-discovered from each plugin root. Installed namespaces are `/dotnet-48:<name>` and `/dotnet-10:<name>`.
+`.claude-plugin/` holds **only** manifests. Components are auto-discovered from the repo root for Claude (plugin source is `"."`). Codex discovers each `skills/<name>/` after the install script links it into `~/.agents/skills/` or `<repo>/.agents/skills/`. Installed namespace in Claude is `/dotnet:<skill-name>`; Codex has no plugin namespacing.
 
 ## Authoring
 
-The plugin choice already pins the runtime — you do not need to declare ".NET 4.8" or ".NET 10" in every skill description. Declare it only when a skill is variant-aware *within* its plugin (e.g. an MVC 5 vs Web Forms skill in `dotnet-48`).
+Each skill declares its target stack in the description — there is no longer a plugin choice that pins it for you. State the stack explicitly (e.g. ".NET Framework 4.8 with ASP.NET MVC 5.3" or ".NET 10 / C# 14 / EF Core 10"). When a skill applies to both stacks, say so directly.
 
-### Skill — `plugins/<plugin>/skills/<name>/SKILL.md`
-Frontmatter requires `name` (kebab-case, must match the folder) and `description` (the trigger — state *what* and *when*; front-load; capped at 1,536 chars combined with `when_to_use`). Body under ~500 lines; push detail into `references/`.
+### Skill — `skills/<name>/SKILL.md`
+Frontmatter requires `name` (kebab-case, must match the folder) and `description` (the trigger — state *what* and *when*; front-load; capped at 1,536 chars combined with `when_to_use`). Body under ~500 lines; push detail into `references/`. The same file is read by Claude Code and Codex CLI without modification.
 
-**Orchestrator skills.** A skill may act as an orchestrator that routes to sibling sub-skills. Both the orchestrator and its sub-skills live as peers under `skills/` in the same plugin — sub-skills are not nested inside the orchestrator's folder. The orchestrator's `description` declares the family it dispatches to; each sub-skill's `description` declares which orchestrator(s) call it. Sub-skills must be useful standalone — the orchestrator is one entry point, not the only one. Treat orchestrator-skill as a pattern when a domain decomposes into a stable set of sub-decisions that all fit one mental model (e.g. one architectural style with multiple lenses).
+**Orchestrator skills.** A skill may act as an orchestrator that routes to sibling sub-skills. Both the orchestrator and its sub-skills live as peers under `skills/`. The orchestrator's `description` declares the family it dispatches to; each sub-skill's `description` declares which orchestrator(s) call it. Sub-skills must be useful standalone. Treat the orchestrator pattern as a fit when a domain decomposes into a stable set of sub-decisions inside one mental model.
 
-### Subagent — `plugins/<plugin>/agents/<name>.md`
-Frontmatter: `name`, `description` (when to dispatch), optional `tools`, optional `model`. Body is the system prompt. Use specialized agents (e.g. `controller-author`, `efcore-migration-runner`) to protect the main thread's context for long, focused tasks.
+### Subagent — `agents/<name>.md`
+Claude-only. Frontmatter: `name`, `description` (when to dispatch), optional `tools`, optional `model`. Body is the system prompt. Use specialized agents (e.g. `controller-author`, `efcore-migration-runner`) to protect the main thread's context for long, focused tasks. Codex equivalents are not configured here today.
 
-### Slash command — `plugins/<plugin>/commands/<name>.md`
-Markdown with optional frontmatter. `$ARGUMENTS` is user input. Skills are preferred for new work — commands are the legacy form retained for compatibility.
+### Slash command — `commands/<name>.md`
+Claude-only. Markdown with optional frontmatter. `$ARGUMENTS` is user input. Skills are preferred for new work — commands are the legacy form retained for compatibility.
 
-### Hook — `plugins/<plugin>/hooks/hooks.json`
-Fires on Claude Code events (`PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `Stop`, etc.). Use for deterministic guardrails (block, validate, normalize) — not advisory text.
+### Hook — `hooks/hooks.json`
+Claude-only. Fires on Claude Code events (`PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `Stop`, etc.). Use for deterministic guardrails (block, validate, normalize) — not advisory text.
 
-### MCP server — `plugins/<plugin>/.mcp.json`
-Only when the integration genuinely needs a server (auth flows, long-running connections, external state). For one-shot or scriptable work, prefer `scripts/` inside a skill.
+### MCP server — `.mcp.json`
+Claude-side configuration. Add only when the integration genuinely needs a server (auth flows, long-running connections, external state). For one-shot or scriptable work, prefer `scripts/` inside a skill.
 
 ### Path env vars across components
-- Skill referencing its own files → `CLAUDE_SKILL_DIR` or relative paths. Points at the skill folder, not the plugin root.
+- Skill referencing its own files → relative paths (works in both runtimes). `CLAUDE_SKILL_DIR` is Claude-only and points at the skill folder.
 - Hooks, MCP, LSP, and monitor configs referencing plugin-bundled files → `CLAUDE_PLUGIN_ROOT`. Treat as read-only — the path changes on every plugin update.
 - Persistent state that must survive plugin updates → `CLAUDE_PLUGIN_DATA`. Auto-created on first reference; resolves under `~/.claude/plugins/data/{id}/`.
 
-### Variant content within a plugin
-`dotnet-48` covers two web stacks (MVC 5 and Web Forms). When a skill applies to both, put per-variant detail in `references/<variant>.md` and let `SKILL.md` select. Slugs:
-- `mvc5.md`, `webforms.md` — web stack split inside `dotnet-48`
-- `ef6.md`, `efcore.md` — only relevant for cross-stack skills, which should be rare given the plugin split
+### Stack-variant content within a skill
+When a skill applies to both stacks (e.g. `code-usage-knowledge-graph`), keep one `SKILL.md` and put per-stack detail in `references/<stack>.md`. Suggested slugs:
+- `mvc5.md`, `webforms.md` — legacy web-stack variants
+- `efcore.md`, `ef6.md` — ORM variants
+- `net48.md`, `net10.md` — runtime variants when the whole skill divides cleanly
 
-`dotnet-10` is single-stack (Core MVC + EF Core), so most of its skills will not need a `references/` split.
+Most skills target one stack and need no split.
 
 ## Naming
 
-kebab-case. Name the task, not the technology — `controller-action-results`, not `mvc-controllers`. Folder name = slug = what users actually type.
+kebab-case. Name the task, not the technology — `controller-action-results`, not `mvc-controllers`. Folder name = slug = what users actually type. The stack lives in the description, not the folder name. (`mvc-ui-behaviors` is named for the task — extracting UI behaviors from legacy MVC slices — not for ".NET Framework 4.8".)
 
 ## Commits
 
-Conventional Commits with a scope: `<type>(<scope>): <subject>`. Scope is the plugin name (`dotnet-10`, `dotnet-48`) for plugin-wide changes, the skill folder name for skill-scoped work, or `claude` for CLAUDE.md edits. Types in active use: `feat`, `fix`, `docs`, `example`.
+Conventional Commits with a scope: `<type>(<scope>): <subject>`. Valid scopes:
+- A skill folder name (`code-usage-knowledge-graph`, `modular-monolith`, …) for skill-scoped work.
+- `claude` for CLAUDE.md edits, `agents` for AGENTS.md, `readme` for README.md.
+- `plugin` for `.claude-plugin/plugin.json` or `.claude-plugin/marketplace.json` changes.
+- `codex` for `scripts/install-codex.sh` or other Codex-side wiring.
+- `repo` for cross-cutting structural changes (layout moves, license, gitignore).
+
+Types in active use: `feat`, `fix`, `docs`, `example`, `refactor`, `chore`.
 
 ## Workflow
 
-Test a plugin locally without installing:
+Test the whole library locally without installing:
+
 ```bash
-claude --plugin-dir /path/to/dotnet-skills/plugins/dotnet-48
-claude --plugin-dir /path/to/dotnet-skills/plugins/dotnet-10
+claude --plugin-dir /path/to/dotnet-skills          # Claude side
+bash scripts/install-codex.sh --target /tmp/codex   # Codex side, dry-target
 ```
-After edits, run `/reload-plugins`.
+
+After edits, run `/reload-plugins` inside Claude Code. For Codex, restart the CLI if it does not pick up new skills automatically.
 
 After publishing, verify the marketplace install path inside Claude Code:
+
 ```text
 /plugin marketplace add marafiq/dotnet-skills
-/plugin install dotnet-48@dotnet-skills
-/plugin install dotnet-10@dotnet-skills
+/plugin install dotnet@dotnet-skills
+```
+
+And the Codex install:
+
+```bash
+git clone https://github.com/marafiq/dotnet-skills.git
+bash dotnet-skills/scripts/install-codex.sh
 ```
 
 ## Adding a skill
 
 End-to-end checklist; each step links to the section with detail.
 
-1. Create `plugins/<plugin>/skills/<kebab-name>/SKILL.md` with `name` and `description` frontmatter — see *Authoring → Skill*.
+1. Create `skills/<kebab-name>/SKILL.md` with `name` and `description` frontmatter — see *Authoring → Skill*. The description must declare the target stack.
 2. Write the body. Push detail into `references/` if length exceeds ~500 lines.
-3. Load and iterate: `claude --plugin-dir plugins/<plugin>`, then `/reload-plugins` after each edit.
-4. Validate: `claude plugin validate plugins/<plugin>`.
-5. Release: bump `version` per *Before release*.
+3. Load and iterate: `claude --plugin-dir .`, then `/reload-plugins` after each edit. For Codex, the symlink picks up edits automatically — no re-run needed.
+4. Validate: `claude plugin validate .` from the repo root.
+5. Update the skill table in [README.md](README.md) so users discover it.
+6. Release: bump `version` per *Before release*.
 
 ## Before release
 
-Run for **each** plugin you changed:
+1. `claude plugin validate .` — checks the plugin manifest and every skill's frontmatter.
+2. `claude --plugin-dir .` — exercise the plugin end-to-end before users install via the marketplace.
+3. `bash scripts/install-codex.sh --dry-run` — confirm Codex enumerates every skill folder.
+4. Bump `version` in `.claude-plugin/plugin.json` **and** the matching plugin entry in `.claude-plugin/marketplace.json`. Without a version bump, marketplace updates do not propagate to installed Claude users. Codex picks up edits via the live symlink with no version gate, but a version bump is still the source of truth for the release.
+5. If discovery fails, run `claude --debug` to see what loaded and what didn't.
 
-1. `claude plugin validate plugins/<plugin-name>` — checks the plugin manifest and component frontmatter.
-2. `claude --plugin-dir plugins/<plugin-name>` — exercise it end-to-end before users install via the marketplace.
-3. Bump `version` in the plugin's `plugin.json` **and** update the matching entry in the root `marketplace.json`. Without a version bump, marketplace updates do not propagate to installed users.
-4. If discovery fails, run `claude --debug` to see what loaded and what didn't.
+## Reference
 
-## Reference (Anthropic docs)
-
+### Claude Code (Anthropic)
 - Plugins: <https://code.claude.com/docs/en/plugins>
 - Skills: <https://code.claude.com/docs/en/skills>
 - Subagents: <https://code.claude.com/docs/en/sub-agents>
 - Hooks: <https://code.claude.com/docs/en/hooks>
 - Marketplaces: <https://code.claude.com/docs/en/plugin-marketplaces>
 - Plugins reference: <https://code.claude.com/docs/en/plugins-reference>
+
+### Codex CLI (OpenAI)
+- Agent Skills: <https://developers.openai.com/codex/skills>
+- AGENTS.md: <https://developers.openai.com/codex/guides/agents-md>
+- CLI reference: <https://developers.openai.com/codex/cli/reference>

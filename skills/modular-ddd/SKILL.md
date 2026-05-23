@@ -10,8 +10,8 @@ description: >
   object here", "is this a domain service or an application service",
   "where do invariants live", or reaches for DDD vocabulary on a
   CRUD-shaped module. Status: placeholder — uses the orchestrator's
-  working summary until deep content is written. Applies to the dotnet-10
-  plugin (.NET 10 / C# 14 / EF Core 10).
+  working summary until deep content is written. Target stack: .NET 10 /
+  C# 14 / EF Core 10.
 ---
 
 # modular-ddd

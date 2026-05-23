@@ -11,7 +11,7 @@ description: >
   type be called", "do these two modules mean the same thing by
   Resident", "where do I put the anti-corruption layer", "do I need an
   ACL between these modules", or surfaces a domain-term conflict between
-  modules. Status: placeholder. Applies to the dotnet-10 plugin.
+  modules. Status: placeholder. Target stack: .NET 10 modular monoliths.
 ---
 
 # modular-shared-language

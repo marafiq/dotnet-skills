@@ -59,7 +59,7 @@ The frame applies *only* when the problem is genuinely a contract between separa
 
 ### Legacy contexts cost more discovery
 
-Legacy may carry an anemic shape, missing value objects, *and* overgrown methods simultaneously, and the same surface question reads differently against each cause. Pair with [`code-usage-knowledge-graph`](../code-usage-knowledge-graph/SKILL.md) (legacy call-site discovery) and `dotnet-48:mvc-ui-behaviors` (behavior extraction) before applying boundary moves; a wrong shape applied confidently to a legacy slice is harder to undo than the original mess.
+Legacy may carry an anemic shape, missing value objects, *and* overgrown methods simultaneously, and the same surface question reads differently against each cause. Pair with [`code-usage-knowledge-graph`](../code-usage-knowledge-graph/SKILL.md) (legacy call-site discovery) and [`mvc-ui-behaviors`](../mvc-ui-behaviors/SKILL.md) (behavior extraction) before applying boundary moves; a wrong shape applied confidently to a legacy slice is harder to undo than the original mess.
 
 ## State the problem before applying
 
