@@ -12,7 +12,7 @@ description: >
   when the user asks "is this design coherent", "should I split this
   module", "should I merge these two modules", "is this module doing
   too much", or any post-design validation question. Status:
-  placeholder. Applies to the dotnet-10 plugin.
+  placeholder. Target stack: .NET 10 / C# 14.
 ---
 
 # modular-coupling-cohesion

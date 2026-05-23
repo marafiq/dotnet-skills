@@ -23,7 +23,7 @@ description: >
   "should I rename Areas to Features", or reaches for layered
   architecture (Controllers / Services / Repositories folders) inside a
   single Area. Scope: ASP.NET Core MVC 10 only — not minimal APIs, not
-  Razor Pages, not Blazor. Applies to the dotnet-10 plugin.
+  Razor Pages, not Blazor.
 ---
 
 # modular-vertical-slice
@@ -86,11 +86,11 @@ These come up often enough that calling them out by name helps:
 - [ ] Endpoint discovery and route templates per Area — when to override `[Route]`, when to lean on conventions
 - [ ] Sharing partial views and tag helpers within an Area without leaking across Areas
 - [ ] Worked example: `/Areas/Residents/` end-to-end, with a list action, a create action, and the cross-cutting filters wired in
-- [ ] Migration recipe: lifting an existing legacy MVC 5 controller into a new MVC 10 Area without breaking behavior (pairs with `dotnet-48:mvc-ui-behaviors`)
+- [ ] Migration recipe: lifting an existing legacy MVC 5 controller into a new MVC 10 Area without breaking behavior (pairs with [`mvc-ui-behaviors`](../mvc-ui-behaviors/SKILL.md))
 
 ## See also
 
 - [`modular-monolith`](../modular-monolith/SKILL.md) — orchestrator; this skill is one tool in its toolbox
 - [`modular-ddd`](../modular-ddd/SKILL.md) — decides the module shape this skill organizes within
 - [`modular-solid`](../modular-solid/SKILL.md) — pressure-tests what this skill exposes outward (Area public surface)
-- `dotnet-48:mvc-ui-behaviors` — captures legacy MVC 5 slice behavior; pair when migrating a slice into a new MVC 10 Area
+- [`mvc-ui-behaviors`](../mvc-ui-behaviors/SKILL.md) — captures legacy MVC 5 slice behavior; pair when migrating a slice into a new MVC 10 Area

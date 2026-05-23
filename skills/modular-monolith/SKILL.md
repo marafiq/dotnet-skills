@@ -26,8 +26,7 @@ description: >
   integration event live", "carve a module out of the legacy app",
   "vertical slice this", or any framing that contrasts a modular
   monolith with microservices or with an event-driven monolith.
-  Applies to the dotnet-10 plugin (.NET 10 / C# 14 / ASP.NET Core
-  MVC 10 / EF Core 10).
+  Target stack: .NET 10 / C# 14 / ASP.NET Core MVC 10 / EF Core 10.
 ---
 
 # modular-monolith
@@ -58,7 +57,7 @@ Before reaching for any sub-skill, define what is being designed. The CLAUDE.md 
 
 A common shortcut to resist: starting at the toolbox before defining the problem produces designs that solve generic problems beautifully and the actual problem badly.
 
-**Modernization principle.** When the work is incremental modernization rather than greenfield, two non-negotiables apply. *Behaviors must be preserved across the cut* — the modern module reproduces what the legacy slice did, observably, before any refactor on top is allowed. Pair `modular-ddd-classifier` (structural, where modules live) with `dotnet-48:mvc-ui-behaviors` (behavioral, what the slice does) to capture both axes. *Pace by feature slice* — pick a vertical slice, study it deeply with the classifier, design the module around it, ship, repeat. Resist the urge to redesign the whole topology before any code lands; the design will be wrong and the team will not recover the time.
+**Modernization principle.** When the work is incremental modernization rather than greenfield, two non-negotiables apply. *Behaviors must be preserved across the cut* — the modern module reproduces what the legacy slice did, observably, before any refactor on top is allowed. Pair [`modular-ddd-classifier`](../modular-ddd-classifier/SKILL.md) (structural, where modules live) with [`mvc-ui-behaviors`](../mvc-ui-behaviors/SKILL.md) (behavioral, what the slice does) to capture both axes. *Pace by feature slice* — pick a vertical slice, study it deeply with the classifier, design the module around it, ship, repeat. Resist the urge to redesign the whole topology before any code lands; the design will be wrong and the team will not recover the time.
 
 ## The discriminator (and the reasoning behind it)
 
@@ -129,13 +128,13 @@ This skill does not:
 
 - Generate C# code. The output is a *design*: modules, surfaces, dispatches, the reasoning behind each choice. Implementation is a separate concern.
 - Cover hosting, configuration, deployment, or CI for the application as a whole. Those are real decisions but not module-level decisions; they have their own skills (planned).
-- Mirror to `dotnet-48`. The legacy plugin has `mvc-ui-behaviors` for behavior extraction; modular-monolith methodology is forward-looking and lives here.
+- Re-derive legacy behavior. The sibling skill [`mvc-ui-behaviors`](../mvc-ui-behaviors/SKILL.md) extracts behavior from legacy MVC 5 slices; modular-monolith methodology is forward-looking and stays scoped to the modern shape.
 - Propose database schema changes. The database is a separate layer with its own constraints and is treated as fixed.
 - Replace judgment. Every default flips under the right pressure (real cross-system target, real distinct SLA, real separate team). The skill names defaults so deviations are deliberate, not the other way around.
 
 ## See also
 
-- `dotnet-48:mvc-ui-behaviors` — extracts user-visible behaviors from legacy MVC 5 slices. Pair with `modular-ddd-classifier` when modernizing: behaviors are the *what*, the classifier output is the *where*.
+- [`mvc-ui-behaviors`](../mvc-ui-behaviors/SKILL.md) — extracts user-visible behaviors from legacy MVC 5 slices. Pair with `modular-ddd-classifier` when modernizing: behaviors are the *what*, the classifier output is the *where*.
 - Ousterhout, *A Philosophy of Software Design* — source for "deep module" terminology used by `modular-ddd-classifier`.
 - Vernon, *Implementing Domain-Driven Design* — DDD tactical patterns referenced by `modular-ddd`, used selectively.
 - Grzybek, *Modular Monolith with DDD* — the popular pattern this skill reasons against. Read it to understand the constraint difference (independently deployable modules with independent data stores) that makes it the right default for one shape and the wrong default for an application backed by a single shared database.

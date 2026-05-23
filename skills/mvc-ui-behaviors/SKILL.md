@@ -18,8 +18,9 @@ description: >
   Logs / OpenTelemetry / metrics out of scope. Trigger on phrases like "document
   this view's behavior", "capture how this drawer works", "spec out this wizard",
   "extract behaviors from this MVC 5 page", or any request to translate a legacy
-  MVC interface into a behavioral contract for re-implementation. Applies to the
-  dotnet-48 plugin (.NET Framework 4.8 / MVC 5.3).
+  MVC interface into a behavioral contract for re-implementation. Source stack:
+  .NET Framework 4.8 with ASP.NET MVC 5.3; output feeds .NET 10 / ASP.NET Core
+  MVC re-implementation.
 ---
 
 # mvc-ui-behaviors

@@ -12,7 +12,7 @@ description: >
   codebase cannot be held in any one head, so the classifier works slice
   by slice and accumulates a map. Pragmatic, not dogmatic; uses Ousterhout
   depth or nesting hierarchy or both, whichever lens fits the slice.
-  Pairs with `dotnet-48:mvc-ui-behaviors` (behavioral classification)
+  Pairs with `mvc-ui-behaviors` (behavioral classification)
   during modernization. Use when the user asks "what natural module seams
   already exist", "find deep modules in our .NET 4.8 source", "carve a
   new module out of MVC 5", "what bounded contexts are hiding in this
@@ -20,19 +20,19 @@ description: >
   X area", or is planning incremental modernization of legacy ASP.NET
   MVC 5 / Web Forms code into a .NET 10 modular monolith. Status:
   placeholder; the artifact schema and worked examples are to be
-  written. Applies to the dotnet-10 plugin (input is .NET 4.8 source;
-  output is consumed by .NET 10 modular design).
+  written. Input is .NET Framework 4.8 source; output feeds .NET 10
+  modular design.
 ---
 
 # modular-ddd-classifier
 
-> **Status — placeholder.** Scaffolded; deep content (artifact schema, worked examples, the interactive question protocol) is to be written. For the working methodology today, use [`modular-monolith`](../modular-monolith/SKILL.md). For legacy *behavior* extraction (the sibling concern that captures *what* a slice does), see `dotnet-48:mvc-ui-behaviors`.
+> **Status — placeholder.** Scaffolded; deep content (artifact schema, worked examples, the interactive question protocol) is to be written. For the working methodology today, use [`modular-monolith`](../modular-monolith/SKILL.md). For legacy *behavior* extraction (the sibling concern that captures *what* a slice does), see [`mvc-ui-behaviors`](../mvc-ui-behaviors/SKILL.md).
 
 ## Problem
 
 A 2.5-million-line legacy codebase cannot be classified in a sweep. Static analyzers produce graphs nobody can read; SME interviews without grounding produce wishlists; whole-codebase rewrites die in the first iteration. The only thing that works at this scale is *progressive disclosure*: pick a feature slice, study it deeply with someone who knows it, write down what you found, and move to the next slice. The artifact accumulates over months; the design that emerges is grounded in what actually exists.
 
-The classifier is the *structural* half of that work. Its sibling, `dotnet-48:mvc-ui-behaviors`, is the *behavioral* half. Together they capture both axes for one slice: what the slice does (behavior) and where its module seams live (structure). Using only one half ships a modern module that either misses required behaviors or re-derives the wrong boundaries.
+The classifier is the *structural* half of that work. Its sibling, [`mvc-ui-behaviors`](../mvc-ui-behaviors/SKILL.md), is the *behavioral* half. Together they capture both axes for one slice: what the slice does (behavior) and where its module seams live (structure). Using only one half ships a modern module that either misses required behaviors or re-derives the wrong boundaries.
 
 The classifier looks for two kinds of structure simultaneously:
 
@@ -103,4 +103,4 @@ A markdown classification artifact per slice, including:
 - [`modular-ddd`](../modular-ddd/SKILL.md) — provides the DDD vocabulary this skill uses as labels
 - [`modular-shared-language`](../modular-shared-language/SKILL.md) — pairs with this skill when the legacy already encodes term conflicts
 - [`modular-coupling-cohesion`](../modular-coupling-cohesion/SKILL.md) — uses this skill's dependency findings to validate the proposed new-world topology
-- `dotnet-48:mvc-ui-behaviors` — sibling extraction skill in the legacy plugin; pair the two during modernization (behaviors are the *what*, this artifact is the *where* and the *seams*)
+- [`mvc-ui-behaviors`](../mvc-ui-behaviors/SKILL.md) — sibling extraction skill that captures legacy MVC 5 / Web Forms behavior; pair the two during modernization (behaviors are the *what*, this artifact is the *where* and the *seams*)
